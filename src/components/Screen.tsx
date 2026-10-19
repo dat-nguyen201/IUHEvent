@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { colors, spacing } from '@/constants/app-theme';
+import { spacing } from '@/constants/app-theme';
 
 export function Screen({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();

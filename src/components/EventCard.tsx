@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View, LayoutChangeEvent } from 'react-native';
-import Animated, { useAnimatedStyle, SharedValue, useSharedValue } from 'react-native-reanimated';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, SharedValue } from 'react-native-reanimated';
 
 import { Badge } from '@/components/Badge';
 import { colors, spacing } from '@/constants/app-theme';
@@ -96,7 +96,7 @@ export function EventCard({ event, index = 0, scrollY, isLast = false }: EventCa
         </View>
       </Pressable>
       
-      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', borderRadius: 20 }, overlayStyle]} pointerEvents="none" />
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', borderRadius: 20 }, overlayStyle]} pointerEvents="none" />
     </Animated.View>
   );
 }

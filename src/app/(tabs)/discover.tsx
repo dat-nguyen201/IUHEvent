@@ -25,7 +25,15 @@ export default function DiscoverScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const selectedCategory = category === allCategories ? undefined : category;
+
+  // Chờ người dùng ngừng gõ 400ms rồi mới gọi service, tránh gọi lặp khi gõ nhanh
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => {
@@ -37,8 +45,9 @@ export default function DiscoverScreen() {
   const loadFirstPage = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setLoadMoreError(null);
     try {
-      const result = await getEvents({ page: 1, pageSize: PAGE_SIZE, query, category: selectedCategory });
+      const result = await getEvents({ page: 1, pageSize: PAGE_SIZE, query: debouncedQuery, category: selectedCategory });
       setEvents(result.items);
       setPage(1);
       setHasMore(result.hasMore);
@@ -49,23 +58,53 @@ export default function DiscoverScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [query, selectedCategory]);
+  }, [debouncedQuery, selectedCategory]);
 
   useEffect(() => { void loadFirstPage(); }, [loadFirstPage]);
 
   const loadMore = useCallback(async () => {
-    if (isLoading || isLoadingMore || !hasMore || error) return;
+    if (isLoading || isLoadingMore || !hasMore || error || loadMoreError) return;
     setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const result = await getEvents({ page: nextPage, pageSize: PAGE_SIZE, query, category: selectedCategory });
+      const result = await getEvents({ page: nextPage, pageSize: PAGE_SIZE, query: debouncedQuery, category: selectedCategory });
       setEvents((current) => [...current, ...result.items]);
       setPage(nextPage);
       setHasMore(result.hasMore);
+    } catch {
+      setLoadMoreError('Không tải thêm được sự kiện.');
     } finally {
       setIsLoadingMore(false);
     }
-  }, [error, hasMore, isLoading, isLoadingMore, page, query, selectedCategory]);
+  }, [debouncedQuery, error, hasMore, isLoading, isLoadingMore, loadMoreError, page, selectedCategory]);
+
+  const [retryToken, setRetryToken] = useState(0);
+  const retryLoadMore = useCallback(() => {
+    setLoadMoreError(null);
+    setRetryToken((value) => value + 1);
+  }, []);
+
+  // Sau khi xoá lỗi, thử tải lại trang kế tiếp với state mới nhất
+  useEffect(() => {
+    if (retryToken > 0) void loadMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryToken]);
+
+  const renderFooter = () => {
+    if (isLoadingMore) return <ActivityIndicator style={styles.footer} color={colors.primary} />;
+    if (loadMoreError) {
+      return (
+        <Pressable onPress={retryLoadMore} style={styles.footerRow}>
+          <Text style={styles.footerError}>{loadMoreError} </Text>
+          <Text style={styles.footerAction}>Thử lại</Text>
+        </Pressable>
+      );
+    }
+    if (!hasMore && events.length > 0) {
+      return <Text style={styles.footerDone}>Đã hiển thị hết {events.length} sự kiện</Text>;
+    }
+    return null;
+  };
 
   const categories = useMemo(() => [allCategories, ...eventCategories], []);
 
@@ -113,7 +152,7 @@ export default function DiscoverScreen() {
           onScroll={scrollHandler}
           scrollEventThrottle={16}
           ListEmptyComponent={<StatusMessage title="Chưa có sự kiện phù hợp" message="Thử từ khóa khác hoặc chọn một danh mục khác." />}
-          ListFooterComponent={isLoadingMore ? <ActivityIndicator style={styles.footer} color={colors.primary} /> : null}
+          ListFooterComponent={renderFooter()}
         />
       )}
     </Screen>
@@ -138,4 +177,8 @@ const styles = StyleSheet.create({
   state: { alignItems: 'center', flex: 1, gap: spacing.sm, justifyContent: 'center' },
   stateText: { color: colors.mutedText },
   footer: { paddingVertical: spacing.md },
+  footerRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', paddingVertical: spacing.md },
+  footerError: { color: colors.mutedText, fontSize: 13 },
+  footerAction: { color: colors.primary, fontSize: 13, fontWeight: '800' },
+  footerDone: { color: colors.mutedText, fontSize: 12, paddingVertical: spacing.md, textAlign: 'center' },
 });
