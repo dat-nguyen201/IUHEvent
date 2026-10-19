@@ -5,6 +5,8 @@
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
     "@expo/ui": "~57.0.20",
+    "@tamagui/config": "^3.0.18",
+    "@tamagui/core": "^3.0.18",
     "expo": "~57.0.25",
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.19",
