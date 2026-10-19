@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 
 import { EventCard } from '@/components/EventCard';
 import { Screen } from '@/components/Screen';
@@ -25,6 +26,11 @@ export default function DiscoverScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const selectedCategory = category === allCategories ? undefined : category;
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
 
   useEffect(() => { setCategory(validCategory); }, [validCategory]);
 
@@ -94,14 +100,18 @@ export default function DiscoverScreen() {
       ) : error ? (
         <View style={styles.list}><StatusMessage title="Có lỗi xảy ra" message={error} actionLabel="Thử lại" onAction={loadFirstPage} /></View>
       ) : (
-        <FlatList
+        <Animated.FlatList
           style={styles.list}
           data={events}
           keyExtractor={(event) => event.id}
-          renderItem={({ item }) => <EventCard event={item} />}
+          renderItem={({ item, index }) => <EventCard event={item} index={index} scrollY={scrollY} isLast={index === events.length - 1} />}
           contentContainerStyle={events.length ? styles.listContent : styles.emptyList}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
           ListEmptyComponent={<StatusMessage title="Chưa có sự kiện phù hợp" message="Thử từ khóa khác hoặc chọn một danh mục khác." />}
           ListFooterComponent={isLoadingMore ? <ActivityIndicator style={styles.footer} color={colors.primary} /> : null}
         />
@@ -119,7 +129,7 @@ const styles = StyleSheet.create({
   categoryScroll: { flexGrow: 0, marginBottom: spacing.sm, maxHeight: 48 },
   categoryList: { gap: spacing.xs, paddingBottom: spacing.xs, paddingRight: spacing.md },
   chip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 999, borderWidth: 1, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  chipSelected: { backgroundColor: colors.text, borderColor: colors.text },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.mutedText, fontSize: 12, fontWeight: '700' },
   chipTextSelected: { color: '#FFFFFF' },
   list: { flex: 1, minHeight: 0 },
