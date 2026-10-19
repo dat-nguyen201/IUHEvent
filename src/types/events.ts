@@ -20,4 +20,7 @@ export type EventPage = {
   items: StudentEvent[];
   page: number;
   hasMore: boolean;
+  total?: number;
+  /** 'remote' = lấy từ API, 'fallback' = dữ liệu demo khi API lỗi. */
+  source?: 'remote' | 'fallback';
 };

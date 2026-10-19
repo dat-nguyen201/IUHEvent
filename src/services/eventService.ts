@@ -1,4 +1,4 @@
-import { studentEvents } from '@/data/events';
+import { fetchAllEvents, getCachedEvents } from '@/services/eventsApi';
 import type { EventCategory, EventPage, StudentEvent } from '@/types/events';
 
 type GetEventsParams = {
@@ -24,14 +24,15 @@ export async function getEvents({
   category,
   fail = false,
 }: GetEventsParams): Promise<EventPage> {
-  await wait(NETWORK_DELAY_MS);
-
   if (fail) {
+    await wait(NETWORK_DELAY_MS);
     throw new Error('Demo network error');
   }
 
+  const { events, source } = await fetchAllEvents();
+
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredEvents = studentEvents.filter((event) => {
+  const filteredEvents = events.filter((event) => {
     const matchesQuery =
       normalizedQuery.length === 0 ||
       event.title.toLowerCase().includes(normalizedQuery) ||
@@ -48,16 +49,18 @@ export async function getEvents({
     items: filteredEvents.slice(start, end),
     page,
     hasMore: end < filteredEvents.length,
+    total: filteredEvents.length,
+    source,
   };
 }
 
 export async function getEventById(id: string): Promise<StudentEvent | undefined> {
-  await wait(NETWORK_DELAY_MS);
-  return getEventByIdSync(id);
+  const { events } = await fetchAllEvents();
+  return events.find((event) => event.id === id);
 }
 
 export function getEventByIdSync(id: string): StudentEvent | undefined {
-  return studentEvents.find((event) => event.id === id);
+  return getCachedEvents().find((event) => event.id === id);
 }
 
 export async function registerEvent(id: string) {
