@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ActionButton } from '@/components/ActionButton';
 import { Badge } from '@/components/Badge';
 import { Screen } from '@/components/Screen';
 import { StatusMessage } from '@/components/StatusMessage';
@@ -63,13 +64,11 @@ export default function EventDetailScreen() {
           <Badge label={checkedIn ? 'Đã check-in' : 'Chưa check-in'} tone={checkedIn ? 'success' : 'neutral'} />
         </View>
 
-        <Pressable
+        <ActionButton
+          label={saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
+          variant={saved ? 'danger' : 'primary'}
           onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
-          style={[styles.primaryButton, saved && styles.secondaryButton]}>
-          <Text style={[styles.primaryButtonText, saved && styles.secondaryButtonText]}>
-            {saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
-          </Text>
-        </Pressable>
+        />
       </ScrollView>
     </Screen>
   );
@@ -135,24 +134,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    paddingVertical: spacing.md,
-  },
-  secondaryButton: {
-    backgroundColor: colors.surface,
-    borderColor: colors.danger,
-    borderWidth: 1,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  secondaryButtonText: {
-    color: colors.danger,
   },
 });

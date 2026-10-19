@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text, View, useTheme } from '@tamagui/core';
 
-import { colors, spacing } from '@/constants/app-theme';
+import { ActionButton } from '@/components/ActionButton';
 
 type StatusMessageProps = {
   title: string;
@@ -10,46 +10,15 @@ type StatusMessageProps = {
 };
 
 export function StatusMessage({ title, message, actionLabel, onAction }: StatusMessageProps) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.message}>{message}</Text>
+    <View style={{ alignItems: 'center', gap: 12, padding: 24 }}>
+      <Text style={{ color: theme.color.val, fontSize: 20, fontWeight: '900', textAlign: 'center' }}>{title}</Text>
+      <Text style={{ color: theme.color.val, fontSize: 15, lineHeight: 22, opacity: 0.65, textAlign: 'center' }}>{message}</Text>
       {actionLabel && onAction ? (
-        <Pressable onPress={onAction} style={styles.button}>
-          <Text style={styles.buttonText}>{actionLabel}</Text>
-        </Pressable>
+        <ActionButton label={actionLabel} onPress={onAction} />
       ) : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.lg,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  message: {
-    color: colors.mutedText,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: 999,
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-});
