@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Badge } from '@/components/Badge';
@@ -10,10 +10,26 @@ import { useAppState } from '@/context/AppStateContext';
 import { getEventByIdSync } from '@/services/eventService';
 import { formatEventDate } from '@/utils/date';
 
+import { ReminderModal } from '@/components/ReminderModal';
+import { useEventReminder } from '@/hooks/use-event-reminder';
+
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } = useAppState();
+
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
+
+  const {
+    isScheduled: isReminderSet,
+    scheduleReminder,
+    removeReminder,
+  } = useEventReminder(
+    event?.id ?? '',
+    event?.title ?? '',
+    event?.location ?? '',
+    event?.startsAt ?? '',
+  );
 
   if (!event) {
     return (
@@ -61,16 +77,60 @@ export default function EventDetailScreen() {
         <View style={styles.statusRow}>
           <Badge label={saved ? 'Đã lưu' : 'Chưa lưu'} tone={saved ? 'success' : 'neutral'} />
           <Badge label={checkedIn ? 'Đã check-in' : 'Chưa check-in'} tone={checkedIn ? 'success' : 'neutral'} />
+          {isReminderSet && <Badge label="Đã bật nhắc nhở" tone="success" />}
         </View>
 
-        <Pressable
-          onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
-          style={[styles.primaryButton, saved && styles.secondaryButton]}>
-          <Text style={[styles.primaryButtonText, saved && styles.secondaryButtonText]}>
-            {saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
-          </Text>
-        </Pressable>
+        {/* Member 4: QR Check-in Action */}
+        <View style={styles.actionSection}>
+          {checkedIn ? (
+            <View style={styles.checkedInBanner}>
+              <Text style={styles.checkedInIcon}>✅</Text>
+              <View style={styles.checkedInTextCol}>
+                <Text style={styles.checkedInTitle}>Bạn đã điểm danh sự kiện này</Text>
+                <Text style={styles.checkedInSub}>Thông tin tham gia đã được ghi nhận vào lịch sử học tập.</Text>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => router.push({ pathname: '/check-in', params: { eventId: event.id } })}
+              style={styles.qrCheckInButton}>
+              <Text style={styles.qrButtonIcon}>📷</Text>
+              <Text style={styles.qrButtonText}>Quét mã QR Check-in ngay</Text>
+            </Pressable>
+          )}
+
+          {/* Member 4: Event Reminder Button */}
+          <Pressable
+            onPress={() => setReminderModalVisible(true)}
+            style={[styles.reminderButton, isReminderSet && styles.reminderButtonActive]}>
+            <Text style={styles.reminderButtonIcon}>{isReminderSet ? '⏰' : '🔔'}</Text>
+            <Text style={[styles.reminderButtonText, isReminderSet && styles.reminderButtonTextActive]}>
+              {isReminderSet ? 'Đã đặt nhắc nhở (Bấm để đổi / hủy)' : 'Nhắc tôi khi sắp diễn ra'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
+            style={[styles.primaryButton, saved && styles.secondaryButton]}>
+            <Text style={[styles.primaryButtonText, saved && styles.secondaryButtonText]}>
+              {saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
+
+      {/* Reminder Options Modal */}
+      <ReminderModal
+        visible={reminderModalVisible}
+        onClose={() => setReminderModalVisible(false)}
+        isScheduled={isReminderSet}
+        onSelectOption={(minutesBefore, isDemoNow) => {
+          scheduleReminder(minutesBefore, isDemoNow);
+        }}
+        onCancelReminder={() => {
+          removeReminder();
+        }}
+      />
     </Screen>
   );
 }
@@ -154,5 +214,78 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: colors.danger,
+  },
+  actionSection: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  checkedInBanner: {
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderColor: '#86EFAC',
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  checkedInIcon: {
+    fontSize: 24,
+  },
+  checkedInTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  checkedInTitle: {
+    color: '#166534',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  checkedInSub: {
+    color: '#15803D',
+    fontSize: 12,
+  },
+  qrCheckInButton: {
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+  },
+  qrButtonIcon: {
+    fontSize: 18,
+  },
+  qrButtonText: {
+    color: '#38BDF8',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  reminderButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.primary,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+  },
+  reminderButtonActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#22C55E',
+  },
+  reminderButtonIcon: {
+    fontSize: 18,
+  },
+  reminderButtonText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  reminderButtonTextActive: {
+    color: '#16A34A',
   },
 });
