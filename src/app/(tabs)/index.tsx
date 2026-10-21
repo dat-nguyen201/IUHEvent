@@ -38,6 +38,17 @@ export default function HomeScreen() {
           <Text style={styles.searchFilter}>☷</Text>
         </Pressable>
 
+        <Pressable onPress={() => router.push('/check-in')} style={styles.quickQrBanner}>
+          <View style={styles.quickQrIconWrap}>
+            <Text style={styles.quickQrIcon}>📷</Text>
+          </View>
+          <View style={styles.quickQrTextWrap}>
+            <Text style={styles.quickQrTitle}>Quét mã QR Check-in</Text>
+            <Text style={styles.quickQrSub}>Điểm danh nhanh sự kiện bạn đang tham gia</Text>
+          </View>
+          <Text style={styles.quickQrChevron}>›</Text>
+        </Pressable>
+
         <View style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Sự kiện sắp tới</Text>
           <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={styles.link}>Xem tất cả</Text></Pressable>
@@ -163,4 +174,41 @@ const styles = StyleSheet.create({
   smallMeta: { color: colors.mutedText, fontSize: 11 },
   chevron: { color: colors.mutedText, fontSize: 22 },
   bottomSpace: { height: spacing.xs },
+  quickQrBanner: {
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  quickQrIconWrap: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderRadius: 12,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  quickQrIcon: {
+    fontSize: 22,
+  },
+  quickQrTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  quickQrTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  quickQrSub: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  quickQrChevron: {
+    color: '#38BDF8',
+    fontSize: 22,
+    fontWeight: '800',
+  },
 });
