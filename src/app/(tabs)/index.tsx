@@ -1,22 +1,54 @@
 import { router } from 'expo-router';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
 
 import { Badge } from '@/components/Badge';
 import { Screen } from '@/components/Screen';
 import { colors, spacing } from '@/constants/app-theme';
 import { useAppState } from '@/context/AppStateContext';
-import { eventCategories, studentEvents } from '@/data/events';
+import { eventCategories } from '@/data/events';
 import { formatEventDate, isFutureEvent } from '@/utils/date';
 import type { StudentEvent } from '@/types/events';
+import { getEvents } from '@/services/eventService';
 
 const categoryColors = ['#E6F0FF', '#E7F6ED', '#FFF2D9', '#FBE9EF'];
 
 export default function HomeScreen() {
   const { user, savedEventIds, checkedInEventIds } = useAppState();
-  const upcomingEvents = studentEvents
-    .filter((event) => isFutureEvent(event.startsAt))
-    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  
+  const [upcomingEvents, setUpcomingEvents] = useState<StudentEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadHomeData() {
+      setIsLoading(true);
+      try {
+        const result = await getEvents({ page: 1, pageSize: 10 });
+        const futureEvents = result.items
+          .filter((event) => isFutureEvent(event.startsAt))
+          .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+        setUpcomingEvents(futureEvents);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadHomeData();
+  }, []);
+
   const featured = upcomingEvents[0];
+
+  if (isLoading) {
+    return (
+      <Screen>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={{ marginTop: 10, color: colors.mutedText }}>Đang tải sự kiện...</Text>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -119,6 +151,7 @@ function SmallEvent({ event }: { event: StudentEvent }) {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { gap: spacing.lg, paddingBottom: spacing.xl },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   greeting: { flex: 1, gap: 3 },
