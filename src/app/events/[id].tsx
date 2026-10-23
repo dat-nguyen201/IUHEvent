@@ -1,6 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { ActionButton } from '@/components/ActionButton';
 import { Badge } from '@/components/Badge';
@@ -15,6 +17,24 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } = useAppState();
+  const gestureX = useSharedValue(0);
+  const swipeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - Math.min(Math.abs(gestureX.value) / 360, 0.35),
+    transform: [{ translateX: gestureX.value }],
+  }));
+  const swipeBack = Gesture.Pan()
+    .activeOffsetX(24)
+    .failOffsetY([-18, 18])
+    .onUpdate((gesture) => {
+      gestureX.set(Math.max(0, gesture.translationX));
+    })
+    .onEnd(() => {
+      if (gestureX.value > 120) {
+        runOnJS(router.back)();
+      } else {
+        gestureX.set(withSpring(0));
+      }
+    });
 
   if (!event) {
     return (
@@ -37,39 +57,43 @@ export default function EventDetailScreen() {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹ Quay lại</Text>
-        </Pressable>
+      <GestureDetector gesture={swipeBack}>
+        <Animated.View style={swipeStyle}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backText}>‹ Quay lại</Text>
+            </Pressable>
 
-        <Image source={event.image} style={styles.image} />
+            <Image source={event.image} style={styles.image} />
 
-        <View style={styles.titleBlock}>
-          <Badge label={event.category} tone="neutral" />
-          <Text style={styles.title}>{event.title}</Text>
-          <Text style={styles.description}>{event.description}</Text>
-        </View>
+            <View style={styles.titleBlock}>
+              <Badge label={event.category} tone="neutral" />
+              <Text style={styles.title}>{event.title}</Text>
+              <Text style={styles.description}>{event.description}</Text>
+            </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>Thời gian</Text>
-          <Text style={styles.infoValue}>{formatEventDate(event.startsAt)}</Text>
-          <Text style={styles.infoLabel}>Địa điểm</Text>
-          <Text style={styles.infoValue}>{event.location}</Text>
-          <Text style={styles.infoLabel}>Đơn vị tổ chức</Text>
-          <Text style={styles.infoValue}>{event.organizer}</Text>
-        </View>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoLabel}>Thời gian</Text>
+              <Text style={styles.infoValue}>{formatEventDate(event.startsAt)}</Text>
+              <Text style={styles.infoLabel}>Địa điểm</Text>
+              <Text style={styles.infoValue}>{event.location}</Text>
+              <Text style={styles.infoLabel}>Đơn vị tổ chức</Text>
+              <Text style={styles.infoValue}>{event.organizer}</Text>
+            </View>
 
-        <View style={styles.statusRow}>
-          <Badge label={saved ? 'Đã lưu' : 'Chưa lưu'} tone={saved ? 'success' : 'neutral'} />
-          <Badge label={checkedIn ? 'Đã check-in' : 'Chưa check-in'} tone={checkedIn ? 'success' : 'neutral'} />
-        </View>
+            <View style={styles.statusRow}>
+              <Badge label={saved ? 'Đã lưu' : 'Chưa lưu'} tone={saved ? 'success' : 'neutral'} />
+              <Badge label={checkedIn ? 'Đã check-in' : 'Chưa check-in'} tone={checkedIn ? 'success' : 'neutral'} />
+            </View>
 
-        <ActionButton
-          label={saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
-          variant={saved ? 'danger' : 'primary'}
-          onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
-        />
-      </ScrollView>
+            <ActionButton
+              label={saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
+              variant={saved ? 'danger' : 'primary'}
+              onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
+            />
+          </ScrollView>
+        </Animated.View>
+      </GestureDetector>
     </Screen>
   );
 }

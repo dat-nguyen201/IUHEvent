@@ -1,7 +1,7 @@
 import { Pressable, type PressableProps } from 'react-native';
-import { Text, View, useTheme } from '@tamagui/core';
+import { Text, useTheme } from '@tamagui/core';
 
-import { colors, spacing } from '@/constants/app-theme';
+import { Surface } from '@/components/TamaguiPrimitives';
 
 type ActionButtonProps = PressableProps & {
   label: string;
@@ -15,22 +15,21 @@ export function ActionButton({ label, variant = 'primary', style, ...props }: Ac
 
   return (
     <Pressable {...props} style={style}>
-      <View
-        style={{
+      <Surface style={{
           alignItems: 'center',
           backgroundColor: isSecondary || isDanger ? theme.background.val : theme.primary.val,
-          borderColor: isDanger ? colors.danger : isSecondary ? colors.border : theme.primary.val,
+          borderColor: isDanger ? theme.danger.val : isSecondary ? theme.border.val : theme.primary.val,
           borderRadius: 16,
           borderWidth: isSecondary || isDanger ? 1 : 0,
           justifyContent: 'center',
           minHeight: 44,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
         }}>
-        <Text style={{ color: isSecondary ? theme.color.val : isDanger ? colors.danger : '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+        <Text style={{ color: isSecondary ? theme.color.val : isDanger ? theme.danger.val : '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
           {label}
         </Text>
-      </View>
+      </Surface>
     </Pressable>
   );
 }

@@ -1,6 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
-
-import { colors, spacing } from '@/constants/app-theme';
+import { AppText, Surface } from '@/components/TamaguiPrimitives';
+import { useTheme } from '@tamagui/core';
 
 type BadgeTone = 'neutral' | 'success';
 
@@ -10,30 +9,20 @@ type BadgeProps = {
 };
 
 export function Badge({ label, tone = 'neutral' }: BadgeProps) {
+  const theme = useTheme();
+  const color = tone === 'success' ? theme.success.val : theme.primary.val;
+
   return (
-    <View style={[styles.badge, tone === 'success' && styles.successBadge]}>
-      <Text style={[styles.text, tone === 'success' && styles.successText]}>{label}</Text>
-    </View>
+    <Surface style={{
+      alignSelf: 'flex-start',
+      backgroundColor: theme.background.val,
+      borderColor: color,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+    }}>
+      <AppText style={{ color, fontSize: 12, fontWeight: '800' }}>{label}</AppText>
+    </Surface>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.softBlue,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-  },
-  successBadge: {
-    backgroundColor: colors.softGreen,
-  },
-  text: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  successText: {
-    color: colors.success,
-  },
-});

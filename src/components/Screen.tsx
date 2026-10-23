@@ -1,40 +1,36 @@
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, useMedia, useTheme } from '@tamagui/core';
 
-import { spacing } from '@/constants/app-theme';
+import { ResponsiveContent } from '@/components/TamaguiPrimitives';
 
 export function Screen({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const media = useMedia();
 
   return (
-    <LinearGradient 
-      colors={['#4A0404', '#172554']} // Dark red fading to dark blue
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
-      <View
+    <View flex={1} style={{ backgroundColor: theme.background.val }}>
+      <ResponsiveContent
         style={[
           styles.screen,
           {
-            paddingTop: insets.top + spacing.md,
-            paddingLeft: Math.max(insets.left, spacing.md),
-            paddingRight: Math.max(insets.right, spacing.md),
-            paddingBottom: Math.max(insets.bottom, spacing.md),
+            flex: 1,
+            paddingHorizontal: media.compact ? 12 : 16,
+            paddingTop: insets.top + 16,
+            paddingLeft: Math.max(insets.left, media.compact ? 12 : 16),
+            paddingRight: Math.max(insets.right, media.compact ? 12 : 16),
+            paddingBottom: Math.max(insets.bottom, 16),
           },
         ]}>
         {children}
-      </View>
-    </LinearGradient>
+      </ResponsiveContent>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   screen: {
     flex: 1,
   },
