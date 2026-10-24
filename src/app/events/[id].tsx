@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { useTheme } from '@tamagui/core';
 
 import { ActionButton } from '@/components/ActionButton';
 import { Badge } from '@/components/Badge';
@@ -17,6 +18,7 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } = useAppState();
+  const theme = useTheme();
   const gestureX = useSharedValue(0);
   const swipeStyle = useAnimatedStyle(() => ({
     opacity: 1 - Math.min(Math.abs(gestureX.value) / 360, 0.35),
@@ -40,7 +42,7 @@ export default function EventDetailScreen() {
     return (
       <Screen>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹ Quay lại</Text>
+          <Text style={[styles.backText, { color: theme.color.val }]}>‹ Quay lại</Text>
         </Pressable>
         <StatusMessage
           title="Không tìm thấy sự kiện"
@@ -61,24 +63,24 @@ export default function EventDetailScreen() {
         <Animated.View style={swipeStyle}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backText}>‹ Quay lại</Text>
+              <Text style={[styles.backText, { color: theme.color.val }]}>‹ Quay lại</Text>
             </Pressable>
 
-            <Image source={event.image} style={styles.image} />
+            <Image source={event.image} style={[styles.image, { backgroundColor: theme.border.val }]} />
 
             <View style={styles.titleBlock}>
               <Badge label={event.category} tone="neutral" />
-              <Text style={styles.title}>{event.title}</Text>
-              <Text style={styles.description}>{event.description}</Text>
+              <Text style={[styles.title, { color: theme.color.val }]}>{event.title}</Text>
+              <Text style={[styles.description, { color: theme.muted.val }]}>{event.description}</Text>
             </View>
 
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Thời gian</Text>
-              <Text style={styles.infoValue}>{formatEventDate(event.startsAt)}</Text>
-              <Text style={styles.infoLabel}>Địa điểm</Text>
-              <Text style={styles.infoValue}>{event.location}</Text>
-              <Text style={styles.infoLabel}>Đơn vị tổ chức</Text>
-              <Text style={styles.infoValue}>{event.organizer}</Text>
+            <View style={[styles.infoCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+              <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Thời gian</Text>
+              <Text style={[styles.infoValue, { color: theme.color.val }]}>{formatEventDate(event.startsAt)}</Text>
+              <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Địa điểm</Text>
+              <Text style={[styles.infoValue, { color: theme.color.val }]}>{event.location}</Text>
+              <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Đơn vị tổ chức</Text>
+              <Text style={[styles.infoValue, { color: theme.color.val }]}>{event.organizer}</Text>
             </View>
 
             <View style={styles.statusRow}>
