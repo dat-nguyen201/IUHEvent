@@ -1,4 +1,5 @@
 import { studentEvents } from '@/data/events';
+import { getStoredValue, setStoredValue } from '@/services/authStorage';
 import type { EventCategory, EventPage, StudentEvent } from '@/types/events';
 
 type GetEventsParams = {
@@ -10,6 +11,38 @@ type GetEventsParams = {
 };
 
 const NETWORK_DELAY_MS = 350;
+const REGISTERED_EVENTS_KEY = 'iuh-event-registered-events';
+const registeredEventIds = new Set<string>();
+let registrationLoad: Promise<void> | null = null;
+
+async function loadRegisteredEvents() {
+  if (!registrationLoad) {
+    registrationLoad = (async () => {
+      const storedValue = await getStoredValue(REGISTERED_EVENTS_KEY);
+      if (!storedValue) return;
+
+      try {
+        const eventIds: unknown = JSON.parse(storedValue);
+        if (!Array.isArray(eventIds)) return;
+        const validEventIds = eventIds.filter(
+          (eventId): eventId is string => typeof eventId === 'string' && Boolean(getEventByIdSync(eventId)),
+        );
+        validEventIds.forEach((eventId) => registeredEventIds.add(eventId));
+      } catch {
+        await setStoredValue(REGISTERED_EVENTS_KEY, JSON.stringify([]));
+      }
+    })().catch((error: unknown) => {
+      registrationLoad = null;
+      throw error;
+    });
+  }
+
+  await registrationLoad;
+}
+
+async function persistRegisteredEvents(nextEventIds: Set<string>) {
+  await setStoredValue(REGISTERED_EVENTS_KEY, JSON.stringify([...nextEventIds]));
+}
 
 function wait(ms: number) {
   return new Promise((resolve) => {
@@ -62,7 +95,33 @@ export function getEventByIdSync(id: string): StudentEvent | undefined {
 
 export async function registerEvent(id: string) {
   await wait(NETWORK_DELAY_MS);
+  if (!getEventByIdSync(id)) {
+    throw new Error('EVENT_NOT_FOUND');
+  }
+  await loadRegisteredEvents();
+  const nextEventIds = new Set(registeredEventIds);
+  nextEventIds.add(id);
+  await persistRegisteredEvents(nextEventIds);
+  registeredEventIds.add(id);
   return { eventId: id, status: 'registered' as const };
+}
+
+export async function cancelEventRegistration(id: string) {
+  await wait(NETWORK_DELAY_MS);
+  if (!getEventByIdSync(id)) {
+    throw new Error('EVENT_NOT_FOUND');
+  }
+  await loadRegisteredEvents();
+  const nextEventIds = new Set(registeredEventIds);
+  nextEventIds.delete(id);
+  await persistRegisteredEvents(nextEventIds);
+  registeredEventIds.delete(id);
+  return { eventId: id, status: 'cancelled' as const };
+}
+
+export async function isEventRegistered(id: string) {
+  await loadRegisteredEvents();
+  return registeredEventIds.has(id);
 }
 
 export async function checkInEvent(id: string, qrValue: string) {
