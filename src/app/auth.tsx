@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import {
@@ -16,10 +16,12 @@ import {
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
+import { getSafeEventRedirect } from '@/utils/event-links';
 
 type AuthMode = 'login' | 'register';
 
 export default function AuthScreen() {
+  const { redirect: redirectParam } = useLocalSearchParams<{ redirect?: string | string[] }>();
   const { login, register, hasSeenGetStarted } = useAuth();
   const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
@@ -58,7 +60,12 @@ export default function AuthScreen() {
     try {
       if (mode === 'register') await register({ name, studentId, email: normalizedEmail, password });
       else await login(normalizedEmail, password);
-      router.replace(hasSeenGetStarted ? '/(tabs)' : '/get-started');
+      const redirect = getSafeEventRedirect(redirectParam);
+      if (redirect && hasSeenGetStarted) router.replace(redirect);
+      else if (redirect) {
+        const redirectPath = Array.isArray(redirectParam) ? redirectParam[0] : redirectParam;
+        router.replace({ pathname: '/get-started', params: { redirect: redirectPath } });
+      } else router.replace(hasSeenGetStarted ? '/(tabs)' : '/get-started');
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : '';
       setError(code === 'EMAIL_EXISTS'
