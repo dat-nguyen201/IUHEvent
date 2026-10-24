@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '@tamagui/core';
 import Animated, {
   SharedValue,
   useAnimatedStyle,
@@ -41,6 +42,7 @@ function pad(n: number) {
 }
 
 export function EventCard({ event, index = 0, scrollY, isLast = false }: EventCardProps) {
+  const theme = useTheme();
   const { isEventSaved, saveEvent, unsaveEvent } = useAppState();
   const saved = isEventSaved(event.id);
 
@@ -90,7 +92,7 @@ export function EventCard({ event, index = 0, scrollY, isLast = false }: EventCa
         onPress={() => router.push({ pathname: '/events/[id]', params: { id: event.id } })}
         onPressIn={() => pressScale.set(withTiming(0.97, { duration: 120 }))}
         onPressOut={() => pressScale.set(withSpring(1, { damping: 12 }))}
-        style={styles.card}
+        style={[styles.card, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}
         accessibilityRole="button"
         accessibilityLabel={`Xem chi tiết ${event.title}`}>
         {/* Ảnh bìa */}
@@ -125,26 +127,26 @@ export function EventCard({ event, index = 0, scrollY, isLast = false }: EventCa
 
         {/* Nội dung */}
         <View style={styles.content}>
-          <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
+          <Text style={[styles.title, { color: theme.color.val }]} numberOfLines={2}>{event.title}</Text>
 
           <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={15} color={colors.primary} />
-            <Text style={styles.metaStrong} numberOfLines={1}>{timeLabel}</Text>
+            <Ionicons name="time-outline" size={15} color={theme.primary.val} />
+            <Text style={[styles.metaStrong, { color: theme.color.val }]} numberOfLines={1}>{timeLabel}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={15} color={colors.mutedText} />
-            <Text style={styles.meta} numberOfLines={1}>{event.location}</Text>
+            <Ionicons name="location-outline" size={15} color={theme.muted.val} />
+            <Text style={[styles.meta, { color: theme.muted.val }]} numberOfLines={1}>{event.location}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Ionicons name="business-outline" size={15} color={colors.mutedText} />
-            <Text style={styles.meta} numberOfLines={1}>{event.organizer}</Text>
+            <Ionicons name="business-outline" size={15} color={theme.muted.val} />
+            <Text style={[styles.meta, { color: theme.muted.val }]} numberOfLines={1}>{event.organizer}</Text>
           </View>
 
           <View style={styles.spacer} />
 
           <View style={styles.capacityRow}>
-            <Text style={styles.capacityText}>
-              <Text style={styles.capacityStrong}>{event.checkedInCount}</Text>/{event.capacity} người tham gia
+            <Text style={[styles.capacityText, { color: theme.muted.val }]}>
+              <Text style={[styles.capacityStrong, { color: theme.color.val }]}>{event.checkedInCount}</Text>/{event.capacity} người tham gia
             </Text>
             {almostFull ? <Text style={styles.hot}>🔥 Sắp đầy</Text> : null}
           </View>

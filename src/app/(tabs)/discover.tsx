@@ -24,6 +24,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { useTheme } from '@tamagui/core';
 
 import { EVENT_CARD_GAP, EVENT_CARD_HEIGHT, EventCard } from '@/components/EventCard';
 import { Screen } from '@/components/Screen';
@@ -49,6 +50,7 @@ const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<StudentEvent>
 
 /** Khung xương nhấp nháy khi đang tải lần đầu. */
 function SkeletonCard() {
+  const theme = useTheme();
   const pulse = useSharedValue(0.4);
   useEffect(() => {
     pulse.set(withRepeat(withTiming(1, { duration: 800 }), -1, true));
@@ -56,18 +58,19 @@ function SkeletonCard() {
   const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
   return (
-    <Animated.View style={[styles.skeleton, style]}>
-      <View style={styles.skeletonCover} />
+    <Animated.View style={[styles.skeleton, { backgroundColor: theme.surface.val }, style]}>
+      <View style={[styles.skeletonCover, { backgroundColor: theme.border.val }]} />
       <View style={styles.skeletonBody}>
-        <View style={[styles.skeletonLine, { width: '80%', height: 18 }]} />
-        <View style={[styles.skeletonLine, { width: '55%' }]} />
-        <View style={[styles.skeletonLine, { width: '65%' }]} />
+        <View style={[styles.skeletonLine, { backgroundColor: theme.border.val, width: '80%', height: 18 }]} />
+        <View style={[styles.skeletonLine, { backgroundColor: theme.border.val, width: '55%' }]} />
+        <View style={[styles.skeletonLine, { backgroundColor: theme.border.val, width: '65%' }]} />
       </View>
     </Animated.View>
   );
 }
 
 function CategoryChip({ label, selected, onPress }: { label: CategoryFilter; selected: boolean; onPress: () => void }) {
+  const theme = useTheme();
   const scale = useSharedValue(1);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
@@ -76,17 +79,18 @@ function CategoryChip({ label, selected, onPress }: { label: CategoryFilter; sel
         onPress={onPress}
         onPressIn={() => scale.set(withTiming(0.92, { duration: 90 }))}
         onPressOut={() => scale.set(withTiming(1, { duration: 140 }))}
-        style={[styles.chip, selected && styles.chipSelected]}
+        style={[styles.chip, { backgroundColor: theme.surface.val, borderColor: theme.border.val }, selected && styles.chipSelected]}
         accessibilityRole="button"
         accessibilityState={{ selected }}>
-        <Ionicons name={chipIcons[label]} size={14} color={selected ? '#FFFFFF' : colors.mutedText} />
-        <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+        <Ionicons name={chipIcons[label]} size={14} color={selected ? '#FFFFFF' : theme.muted.val} />
+        <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.muted.val }]}>{label}</Text>
       </Pressable>
     </Animated.View>
   );
 }
 
 export default function DiscoverScreen() {
+  const theme = useTheme();
   const params = useLocalSearchParams<{ category?: string }>();
   const validCategory = eventCategories.includes(params.category as EventCategory) ? (params.category as EventCategory) : allCategories;
   const [events, setEvents] = useState<StudentEvent[]>([]);
@@ -205,7 +209,7 @@ export default function DiscoverScreen() {
     if (loadMoreError) {
       return (
         <Pressable onPress={retryLoadMore} style={styles.footerRow}>
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.mutedText} />
+          <Ionicons name="cloud-offline-outline" size={16} color={theme.muted.val} />
           <Text style={styles.footerMuted}>{loadMoreError}</Text>
           <Text style={styles.footerAction}>Thử lại</Text>
         </Pressable>
@@ -227,35 +231,35 @@ export default function DiscoverScreen() {
     <Screen>
       {/* Thanh tiêu đề gọn hiện ra khi cuộn */}
       <View style={styles.topBar}>
-        <Animated.Text style={[styles.compactTitle, compactTitleStyle]}>Khám phá</Animated.Text>
+        <Animated.Text style={[styles.compactTitle, compactTitleStyle, { color: theme.color.val }]}>Khám phá</Animated.Text>
       </View>
 
       {/* Tiêu đề lớn, thu gọn khi cuộn */}
       <Animated.View style={[styles.hero, heroStyle]}>
         <Text style={styles.eyebrow}>TÌM HOẠT ĐỘNG MỚI</Text>
-        <Text style={styles.title}>Khám phá sự kiện</Text>
+        <Text style={[styles.title, { color: theme.color.val }]}>Khám phá sự kiện</Text>
       </Animated.View>
 
       {/* Ô tìm kiếm */}
-      <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-        <Ionicons name="search" size={18} color={searchFocused ? colors.text : colors.mutedText} />
+      <View style={[styles.searchBox, { backgroundColor: theme.surface.val, borderColor: searchFocused ? theme.primary.val : theme.border.val }]}>
+        <Ionicons name="search" size={18} color={searchFocused ? theme.color.val : theme.muted.val} />
         <TextInput
           value={query}
           onChangeText={setQuery}
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
           placeholder="Tìm sự kiện hoặc địa điểm"
-          placeholderTextColor={colors.mutedText}
-          style={styles.searchInput}
+          placeholderTextColor={theme.muted.val}
+          style={[styles.searchInput, { color: theme.color.val }]}
           returnKeyType="search"
           onSubmitEditing={Keyboard.dismiss}
           autoCorrect={false}
         />
         {isTyping ? (
-          <ActivityIndicator size="small" color={colors.mutedText} />
+          <ActivityIndicator size="small" color={theme.muted.val} />
         ) : query.length > 0 ? (
           <Pressable hitSlop={10} onPress={() => setQuery('')} accessibilityLabel="Xoá từ khoá">
-            <Ionicons name="close-circle" size={18} color={colors.mutedText} />
+            <Ionicons name="close-circle" size={18} color={theme.muted.val} />
           </Pressable>
         ) : null}
       </View>
