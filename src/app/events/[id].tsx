@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -7,6 +7,7 @@ import { useTheme } from '@tamagui/core';
 
 import { ActionButton } from '@/components/ActionButton';
 import { Badge } from '@/components/Badge';
+import { HoldToCancelButton } from '@/components/HoldToCancelButton';
 import { Screen } from '@/components/Screen';
 import { StatusMessage } from '@/components/StatusMessage';
 import { colors, spacing } from '@/constants/app-theme';
@@ -18,6 +19,7 @@ export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } = useAppState();
+  const [cancelSuccess, setCancelSuccess] = useState(false);
   const theme = useTheme();
   const gestureX = useSharedValue(0);
   const swipeStyle = useAnimatedStyle(() => ({
@@ -38,6 +40,12 @@ export default function EventDetailScreen() {
       }
     });
 
+  useEffect(() => {
+    if (!cancelSuccess) return;
+    const timer = setTimeout(() => setCancelSuccess(false), 1100);
+    return () => clearTimeout(timer);
+  }, [cancelSuccess]);
+
   if (!event) {
     return (
       <Screen>
@@ -56,6 +64,7 @@ export default function EventDetailScreen() {
 
   const saved = isEventSaved(event.id);
   const checkedIn = checkedInEventIds.includes(event.id);
+  const showCancelButton = saved || cancelSuccess;
 
   return (
     <Screen>
@@ -88,11 +97,21 @@ export default function EventDetailScreen() {
               <Badge label={checkedIn ? 'Đã check-in' : 'Chưa check-in'} tone={checkedIn ? 'success' : 'neutral'} />
             </View>
 
-            <ActionButton
-              label={saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
-              variant={saved ? 'danger' : 'primary'}
-              onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
-            />
+            {showCancelButton ? (
+              <HoldToCancelButton
+                disabled={cancelSuccess}
+                onConfirm={() => {
+                  unsaveEvent(event.id);
+                  setCancelSuccess(true);
+                }}
+              />
+            ) : (
+              <ActionButton
+                label="Lưu vào lịch"
+                variant="primary"
+                onPress={() => saveEvent(event.id)}
+              />
+            )}
           </ScrollView>
         </Animated.View>
       </GestureDetector>
