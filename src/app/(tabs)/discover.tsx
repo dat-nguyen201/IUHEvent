@@ -317,7 +317,7 @@ export default function DiscoverScreen() {
               onRefresh={() => loadFirstPage('refresh')}
               tintColor={colors.primary}
               colors={[colors.primary]}
-              progressBackgroundColor="#111827"
+              progressBackgroundColor={colors.border}
             />
           }
           ListEmptyComponent={
@@ -353,8 +353,8 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 30, fontWeight: '900', letterSpacing: -0.6 },
   searchBox: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
@@ -363,14 +363,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: 14,
   },
-  searchBoxFocused: { backgroundColor: 'rgba(255,255,255,0.11)', borderColor: 'rgba(239,68,68,0.6)' },
+  searchBoxFocused: { backgroundColor: colors.surface, borderColor: colors.primary },
   searchInput: { color: colors.text, flex: 1, fontSize: 15, height: '100%' },
   categoryScroll: { flexGrow: 0, marginHorizontal: -spacing.md, maxHeight: 44 },
   categoryList: { gap: spacing.xs, paddingHorizontal: spacing.md },
   chip: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 999,
     borderWidth: 1,
     flexDirection: 'row',
@@ -390,19 +390,19 @@ const styles = StyleSheet.create({
   footerRow: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: spacing.md },
   footerMuted: { color: colors.mutedText, fontSize: 13 },
   footerAction: { color: colors.primary, fontSize: 13, fontWeight: '800' },
-  footerLine: { backgroundColor: 'rgba(255,255,255,0.1)', flex: 1, height: 1 },
+  footerLine: { backgroundColor: colors.border, flex: 1, height: 1 },
   footerDone: { color: colors.mutedText, fontSize: 12 },
   skeleton: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: colors.surface,
     borderRadius: 24,
     height: 300,
     marginBottom: EVENT_CARD_GAP,
     marginTop: spacing.xs,
     overflow: 'hidden',
   },
-  skeletonCover: { backgroundColor: 'rgba(255,255,255,0.07)', height: 170 },
+  skeletonCover: { backgroundColor: colors.border, height: 170 },
   skeletonBody: { gap: 10, padding: spacing.md },
-  skeletonLine: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6, height: 12 },
+  skeletonLine: { backgroundColor: colors.border, borderRadius: 6, height: 12 },
   fab: { bottom: spacing.lg, position: 'absolute', right: spacing.lg },
   fabButton: {
     alignItems: 'center',

@@ -175,8 +175,8 @@ const styles = StyleSheet.create({
   },
   card: {
     height: EVENT_CARD_HEIGHT,
-    backgroundColor: '#111827',
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   capacityText: { color: colors.mutedText, fontSize: 12.5 },
   capacityStrong: { color: colors.text, fontWeight: '800' },
   hot: { color: '#FB923C', fontSize: 12, fontWeight: '800' },
-  progressTrack: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 999, height: 6, overflow: 'hidden' },
+  progressTrack: { backgroundColor: colors.border, borderRadius: 999, height: 6, overflow: 'hidden' },
   progressFill: { borderRadius: 999, height: '100%' },
   dim: { backgroundColor: '#000', borderRadius: 24 },
 });
