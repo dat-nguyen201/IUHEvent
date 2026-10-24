@@ -72,8 +72,12 @@ export default function EventDetailScreen() {
   return (
     <Screen>
       <GestureDetector gesture={detailGestures}>
-        <Animated.View style={swipeStyle}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <Animated.View style={[swipeStyle, styles.detailContainer]}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            style={styles.scrollView}
+            contentContainerStyle={styles.content}>
             <Pressable onPress={() => router.back()} style={styles.backButton}>
               <Text style={[styles.backText, { color: theme.color.val }]}>‹ Quay lại</Text>
             </Pressable>
@@ -128,6 +132,12 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.md,
     paddingBottom: spacing.xl,
+  },
+  detailContainer: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
   },
   backButton: {
     alignItems: 'center',
