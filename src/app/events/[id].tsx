@@ -30,6 +30,7 @@ export default function EventDetailScreen() {
   const swipeBack = Gesture.Pan()
     .activeOffsetX(24)
     .failOffsetY([-18, 18])
+    .maxPointers(1)
     .onUpdate((gesture) => {
       gestureX.set(Math.max(0, gesture.translationX));
     })
@@ -40,6 +41,7 @@ export default function EventDetailScreen() {
         gestureX.set(withSpring(0));
       }
     });
+  const detailGestures = Gesture.Simultaneous(swipeBack, Gesture.Native());
 
   useEffect(() => {
     if (!cancelSuccess) return;
@@ -69,7 +71,7 @@ export default function EventDetailScreen() {
 
   return (
     <Screen>
-      <GestureDetector gesture={swipeBack}>
+      <GestureDetector gesture={detailGestures}>
         <Animated.View style={swipeStyle}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
             <Pressable onPress={() => router.back()} style={styles.backButton}>
