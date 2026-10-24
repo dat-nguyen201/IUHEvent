@@ -6,7 +6,7 @@ Tài liệu này ghi nhận ba chức năng đầu tiên của thành viên 5 tr
 2. `feat/shared-ui`
 3. `feat/event-animations`
 
-Phần AI tóm tắt sự kiện (`feat/ai-event-summary`) không thuộc tài liệu này.
+Phần AI tóm tắt sự kiện (`feat/ai-event-summary`) được ghi ở mục 6 của tài liệu này.
 
 ## 1. Kết quả đã triển khai
 
@@ -242,7 +242,57 @@ Khi thêm gesture mới:
 4. Có phản hồi trực quan trong lúc kéo.
 5. Có hành vi hoàn tác khi chưa đạt ngưỡng.
 
-## 6. Quy tắc theme động
+## 6. AI event summary
+
+### Mục tiêu và nguyên tắc an toàn
+
+Tóm tắt AI được đặt trong component riêng để không làm xung đột với màn chi tiết do thành viên 3 sở hữu:
+
+- [`src/components/EventSummary.tsx`](./src/components/EventSummary.tsx): UI consent, loading, kết quả, fallback và thử lại.
+- [`src/services/aiSummaryService.ts`](./src/services/aiSummaryService.ts): gọi proxy tùy chọn và tạo tóm tắt demo.
+- [`src/app/events/[id].tsx`](./src/app/events/[id].tsx): chỉ chèn `EventSummary` sau phần thông tin sự kiện.
+
+Ứng dụng không chứa API key. Nếu dùng AI thật, app chỉ gọi endpoint proxy qua biến môi trường `EXPO_PUBLIC_AI_SUMMARY_URL`; API key của nhà cung cấp phải nằm ở server proxy, không nằm trong Expo bundle.
+
+Payload gửi đi chỉ gồm dữ liệu công khai của sự kiện:
+
+- tiêu đề, mô tả, thời gian, địa điểm;
+- danh mục, đơn vị tổ chức và `summarySource`.
+
+Không gửi user, email, mã sinh viên, saved state, check-in state hoặc thông tin xác thực. Các trường text được giới hạn độ dài trước khi gửi; response cũng được kiểm tra và giới hạn tối đa.
+
+### Luồng sử dụng
+
+1. Người dùng mở chi tiết sự kiện.
+2. Component hiển thị giải thích dữ liệu nào sẽ được gửi.
+3. Người dùng phải bật consent bằng checkbox.
+4. Bấm `Tạo tóm tắt` để bắt đầu.
+5. Trong lúc chờ, nút hiển thị loading và không cho gửi lặp.
+6. Nếu proxy trả về `{ "summary": "..." }` hoặc `{ "text": "..." }`, kết quả được đánh dấu là remote.
+7. Nếu chưa cấu hình endpoint, timeout, HTTP lỗi hoặc response sai định dạng, app hiển thị tóm tắt demo cục bộ kèm thông báo rõ ràng.
+8. Người dùng có thể bấm `Tạo lại`; consent phải được bật lại sau khi kết quả bị đóng.
+
+Fallback demo luôn tạo từ dữ liệu sự kiện hiện có, nên màn hình vẫn hữu ích khi offline hoặc chưa có backend. Không coi fallback là kết quả AI thật.
+
+### Cấu hình endpoint proxy
+
+Tạo biến môi trường public khi chạy app:
+
+```text
+EXPO_PUBLIC_AI_SUMMARY_URL=https://your-domain.example/api/event-summary
+```
+
+Proxy nên:
+
+1. xác thực request và giới hạn tần suất;
+2. kiểm soát độ dài/nội dung đầu vào;
+3. gọi nhà cung cấp AI bằng secret ở server;
+4. trả JSON tối giản `{ "summary": "..." }`;
+5. không ghi log dữ liệu người dùng hoặc prompt nhạy cảm.
+
+Không đặt `OPENAI_API_KEY`, `GEMINI_API_KEY` hoặc secret tương tự vào `EXPO_PUBLIC_*`, `app.json`, source code hay file bundle.
+
+## 7. Quy tắc theme động
 
 Không dùng `colors` tĩnh cho nội dung cần thay đổi theo theme. Sử dụng:
 
@@ -263,13 +313,13 @@ Quy tắc này đặc biệt quan trọng với:
 
 Bảng màu trong [`src/constants/app-theme.ts`](./src/constants/app-theme.ts) vẫn được giữ cho các màn React Native chưa chuyển hoàn toàn, nhưng component mới nên ưu tiên `useTheme()`. Khi sửa một màn hình có cả hai hệ màu, cần kiểm tra cả Light và Dark để tránh chữ/nền bị hòa màu.
 
-## 7. Phạm vi tích hợp và ownership
+## 8. Phạm vi tích hợp và ownership
 
 - `TamaguiProvider` và config: thành viên 5.
 - Primitive, button, badge, status message và screen: thành viên 5.
 - `EventCard` và animation danh sách: giữ ownership thành viên 2; thành viên 5 chỉ tích hợp màu theme động và không thay đổi API dữ liệu.
 - Màn chi tiết: thành viên 3 sở hữu luồng dữ liệu; thành viên 5 cung cấp gesture riêng, không thay đổi Context hoặc service.
-- AI summary: chưa triển khai trong phần này.
+- AI summary: component/service riêng của thành viên 5; không thay đổi API Context hoặc service sự kiện.
 
 Khi tích hợp nhánh khác:
 
@@ -279,7 +329,7 @@ Khi tích hợp nhánh khác:
 4. Giữ accessibility label, điều hướng và hành vi lưu sự kiện hiện có.
 5. Nếu conflict ở EventCard, ưu tiên giữ logic dữ liệu của thành viên 2 và áp dụng lại phần theme/animation có kiểm soát.
 
-## 8. Chạy và kiểm tra
+## 9. Chạy và kiểm tra
 
 Cài dependency:
 
@@ -316,7 +366,7 @@ Kết quả tại thời điểm ghi tài liệu:
 - Expo lint: đạt.
 - Expo Doctor: `21/21 checks passed`.
 
-## 9. Checklist nghiệm thu
+## 10. Checklist nghiệm thu
 
 - [x] Tamagui config dùng `@tamagui/config/v6`.
 - [x] Root layout có một `TamaguiProvider`.
@@ -329,5 +379,7 @@ Kết quả tại thời điểm ghi tài liệu:
 - [x] Khám phá có animation cho filter, loading và scroll.
 - [x] Có gesture vuốt ngang có ý nghĩa để quay lại.
 - [x] Gesture không sửa chồng vào ownership dữ liệu của thành viên 2.
+- [x] AI summary có consent trước khi gửi dữ liệu.
+- [x] Không có API key trong mobile app.
+- [x] Có proxy tùy chọn, loading, lỗi, giới hạn payload và fallback demo.
 - [x] TypeScript, lint và Expo Doctor đều đạt.
-

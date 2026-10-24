@@ -83,6 +83,7 @@ Mỗi nhánh dưới đây nên là một PR chức năng nhỏ, có tiêu chí 
 - `feat/event-animations`: triển khai hai animation Reanimated phục vụ phản hồi trạng thái; ít nhất một animation được kích hoạt bằng gesture có ý nghĩa, không chỉ trang trí. Phối hợp thành viên 2 để tránh cùng sửa EventCard.
 - Trạng thái tích hợp hiện tại: `TamaguiProvider` dùng config v6 với theme sáng/tối, token màu/khoảng cách/bán kính và media query compact/tablet. `Screen`, `ActionButton`, `Badge` và `StatusMessage` dùng chung primitive Tamagui; màn chi tiết hỗ trợ vuốt ngang sang phải để quay lại. `EventCard` giữ ownership animation xếp chồng và phản hồi lưu của thành viên 2.
 - `feat/ai-event-summary`: tạo tóm tắt sự kiện qua proxy/server hoặc giải pháp không để API key trong app; thêm đồng ý gửi dữ liệu, kiểm soát nội dung/giới hạn, loading/error và fallback demo. Giao diện tóm tắt đặt trong component riêng để tránh xung đột với màn chi tiết của thành viên 3.
+- Trạng thái tích hợp AI: `EventSummary` đã được gắn vào màn chi tiết; người dùng phải đồng ý trước khi gửi dữ liệu công khai. App gọi proxy tùy chọn qua `EXPO_PUBLIC_AI_SUMMARY_URL`, kiểm tra/giới hạn payload và response, có loading, retry, thông báo lỗi và fallback demo cục bộ khi chưa có proxy hoặc proxy thất bại. Không có API key trong mobile app.
 - Nghiệm thu: hai theme và ba component được dùng trong app thật; hai animation hoạt động; AI có phương án lỗi/dự phòng và không gửi dữ liệu nhạy cảm khi chưa đồng ý.
 
 **Việc chung, mỗi người có phần sở hữu rõ**

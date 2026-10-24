@@ -8,6 +8,7 @@ import { useTheme } from '@tamagui/core';
 import { ActionButton } from '@/components/ActionButton';
 import { Badge } from '@/components/Badge';
 import { HoldToCancelButton } from '@/components/HoldToCancelButton';
+import { EventSummary } from '@/components/EventSummary';
 import { Screen } from '@/components/Screen';
 import { StatusMessage } from '@/components/StatusMessage';
 import { colors, spacing } from '@/constants/app-theme';
@@ -91,6 +92,8 @@ export default function EventDetailScreen() {
               <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Đơn vị tổ chức</Text>
               <Text style={[styles.infoValue, { color: theme.color.val }]}>{event.organizer}</Text>
             </View>
+
+            <EventSummary event={event} />
 
             <View style={styles.statusRow}>
               <Badge label={saved ? 'Đã lưu' : 'Chưa lưu'} tone={saved ? 'success' : 'neutral'} />
