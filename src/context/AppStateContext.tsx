@@ -1,4 +1,6 @@
-import { createContext, type PropsWithChildren, useCallback, useContext, useMemo, useReducer } from 'react';
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useReducer, useState } from 'react';
+
+import { getStoredValue, setStoredValue } from '@/services/authStorage';
 
 type User = {
   id: string;
@@ -16,6 +18,7 @@ type AppState = {
 
 type AppAction =
   | { type: 'set-user'; user: User | null }
+  | { type: 'hydrate-events'; savedEventIds: string[]; checkedInEventIds: string[] }
   | { type: 'save-event'; eventId: string }
   | { type: 'unsave-event'; eventId: string }
   | { type: 'check-in-event'; eventId: string };
@@ -34,12 +37,20 @@ const initialState: AppState = {
   checkedInEventIds: [],
 };
 
+const APP_STATE_STORAGE_KEY = 'iuh-event-app-state';
+
 const AppStateContext = createContext<AppStateContextValue | undefined>(undefined);
 
 function appStateReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'set-user':
       return { ...state, user: action.user };
+    case 'hydrate-events':
+      return {
+        ...state,
+        savedEventIds: [...new Set([...action.savedEventIds, ...state.savedEventIds])],
+        checkedInEventIds: [...new Set([...action.checkedInEventIds, ...state.checkedInEventIds])],
+      };
     case 'save-event':
       if (state.savedEventIds.includes(action.eventId)) {
         return state;
@@ -62,6 +73,58 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 
 export function AppStateProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(appStateReducer, initialState);
+  const [isStorageReady, setIsStorageReady] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const hydrateEvents = async () => {
+      try {
+        const storedValue = await getStoredValue(APP_STATE_STORAGE_KEY);
+        if (storedValue) {
+          try {
+            const parsed: unknown = JSON.parse(storedValue);
+            if (parsed && typeof parsed === 'object') {
+              const persisted = parsed as { savedEventIds?: unknown; checkedInEventIds?: unknown };
+              dispatch({
+                type: 'hydrate-events',
+                savedEventIds: Array.isArray(persisted.savedEventIds)
+                  ? persisted.savedEventIds.filter((eventId): eventId is string => typeof eventId === 'string')
+                  : [],
+                checkedInEventIds: Array.isArray(persisted.checkedInEventIds)
+                  ? persisted.checkedInEventIds.filter((eventId): eventId is string => typeof eventId === 'string')
+                  : [],
+              });
+            }
+          } catch {
+            // Ignore malformed local data and keep the app state usable.
+          }
+        }
+        if (isActive) setIsStorageReady(true);
+      } catch {
+        // Keep the current session usable if device storage is temporarily unavailable.
+      }
+    };
+
+    void hydrateEvents();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isStorageReady) return;
+
+    void setStoredValue(
+      APP_STATE_STORAGE_KEY,
+      JSON.stringify({
+        savedEventIds: state.savedEventIds,
+        checkedInEventIds: state.checkedInEventIds,
+      }),
+    ).catch(() => {
+      // Storage failures should not interrupt in-memory app interactions.
+    });
+  }, [isStorageReady, state.checkedInEventIds, state.savedEventIds]);
 
   const saveEvent = useCallback((eventId: string) => {
     dispatch({ type: 'save-event', eventId });
