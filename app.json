@@ -34,6 +34,20 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép IUH Event sử dụng máy ảnh để quét mã QR check-in sự kiện.",
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#1F4E79"
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {

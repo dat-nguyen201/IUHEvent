@@ -63,14 +63,26 @@ export default function ScheduleScreen() {
               <Text style={styles.location}>{item.event.location}</Text>
               <View style={styles.cardFooter}>
                 <Badge label={isCheckedIn ? 'Đã check-in' : 'Chưa check-in'} tone={isCheckedIn ? 'success' : 'neutral'} />
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    unsaveEvent(item.event.id);
-                  }}
-                  style={styles.removeButton}>
-                  <Text style={styles.removeButtonText}>Hủy lưu</Text>
-                </Pressable>
+                <View style={styles.footerActions}>
+                  {!isCheckedIn && (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        router.push({ pathname: '/check-in', params: { eventId: item.event.id } });
+                      }}
+                      style={styles.checkInQuickButton}>
+                      <Text style={styles.checkInQuickText}>📷 Quét QR</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      unsaveEvent(item.event.id);
+                    }}
+                    style={styles.removeButton}>
+                    <Text style={styles.removeButtonText}>Hủy lưu</Text>
+                  </Pressable>
+                </View>
               </View>
             </Pressable>
           );
@@ -164,6 +176,22 @@ const styles = StyleSheet.create({
   },
   removeButtonText: {
     color: colors.danger,
+    fontWeight: '800',
+  },
+  footerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  checkInQuickButton: {
+    backgroundColor: '#0F172A',
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  checkInQuickText: {
+    color: '#38BDF8',
+    fontSize: 12,
     fontWeight: '800',
   },
 });

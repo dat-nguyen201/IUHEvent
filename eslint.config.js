@@ -7,6 +7,7 @@ module.exports = defineConfig([
     ignores: ['.expo/**', 'node_modules/**'],
     rules: {
       'react-hooks/set-state-in-effect': 'off',
+      'import/no-unresolved': 'off',
     },
   },
 ]);
