@@ -1,5 +1,5 @@
-import { router, Stack, useSegments } from 'expo-router';
-import { useEffect } from 'react';
+import { router, Stack, useLocalSearchParams, useSegments } from 'expo-router';
+import { useEffect, useMemo } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useColorScheme } from 'react-native';
@@ -7,6 +7,7 @@ import { TamaguiProvider } from '@tamagui/core';
 
 import { AppStateProvider } from '@/context/AppStateContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { getSafeEventRedirect } from '@/utils/event-links';
 import { tamaguiConfig } from '../../tamagui.config';
 
 export default function RootLayout() {
@@ -37,8 +38,10 @@ export default function RootLayout() {
 
 function RouteGuard() {
   const segments = useSegments() as readonly string[];
+  const { redirect } = useLocalSearchParams<{ redirect?: string | string[] }>();
   const { user, isReady, hasSeenGetStarted } = useAuth();
   const route = segments[0];
+  const pendingRedirect = useMemo(() => getSafeEventRedirect(redirect), [redirect]);
 
   useEffect(() => {
     if (!isReady || !route || route === 'index') return;
@@ -46,11 +49,19 @@ function RouteGuard() {
     const isOnboardingRoute = route === 'get-started';
     const isProtectedRoute = route === '(tabs)' || route === 'events';
 
-    if (!user && (isProtectedRoute || isOnboardingRoute)) router.replace('/auth');
-    else if (user && isProtectedRoute && !hasSeenGetStarted) router.replace('/get-started');
+    const pendingEventPath = route === 'events' && segments[1]
+      ? `/events/${encodeURIComponent(segments[1])}`
+      : undefined;
+    const pendingParams = pendingEventPath ? { redirect: pendingEventPath } : undefined;
+    if (!user && (isProtectedRoute || isOnboardingRoute)) {
+      router.replace(pendingParams ? { pathname: '/auth', params: pendingParams } : '/auth');
+    }
+    else if (user && isProtectedRoute && !hasSeenGetStarted) {
+      router.replace(pendingParams ? { pathname: '/get-started', params: pendingParams } : '/get-started');
+    }
     else if (user && isAuthRoute) router.replace(hasSeenGetStarted ? '/(tabs)' : '/get-started');
-    else if (user && isOnboardingRoute && hasSeenGetStarted) router.replace('/(tabs)');
-  }, [hasSeenGetStarted, isReady, route, user]);
+    else if (user && isOnboardingRoute && hasSeenGetStarted) router.replace(pendingRedirect ?? '/(tabs)');
+  }, [hasSeenGetStarted, isReady, pendingRedirect, redirect, route, segments, user]);
 
   return null;
 }

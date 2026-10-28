@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -6,8 +6,10 @@ import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
 import { studentEvents } from '@/data/events';
+import { getSafeEventRedirect } from '@/utils/event-links';
 
 export default function GetStartedScreen() {
+  const { redirect } = useLocalSearchParams<{ redirect?: string | string[] }>();
   const { user, finishGetStarted } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export default function GetStartedScreen() {
     setError('');
     try {
       await finishGetStarted();
-      router.replace('/(tabs)');
+      router.replace(getSafeEventRedirect(redirect) ?? '/(tabs)');
     } catch {
       setError('Không lưu được trạng thái. Vui lòng thử lại.');
       setBusy(false);
