@@ -12,11 +12,13 @@ import { formatEventDate } from '@/utils/date';
 
 import { ReminderModal } from '@/components/ReminderModal';
 import { useEventReminder } from '@/hooks/use-event-reminder';
+import { useTheme } from '@tamagui/core';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } = useAppState();
+  const theme = useTheme();
 
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
 
@@ -35,7 +37,7 @@ export default function EventDetailScreen() {
     return (
       <Screen>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹ Quay lại</Text>
+          <Text style={[styles.backText, { color: theme.color.val }]}>‹ Quay lại</Text>
         </Pressable>
         <StatusMessage
           title="Không tìm thấy sự kiện"
@@ -54,24 +56,24 @@ export default function EventDetailScreen() {
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹ Quay lại</Text>
+          <Text style={[styles.backText, { color: theme.color.val }]}>‹ Quay lại</Text>
         </Pressable>
 
         <Image source={event.image} style={styles.image} />
 
         <View style={styles.titleBlock}>
           <Badge label={event.category} tone="neutral" />
-          <Text style={styles.title}>{event.title}</Text>
-          <Text style={styles.description}>{event.description}</Text>
+          <Text style={[styles.title, { color: theme.color.val }]}>{event.title}</Text>
+          <Text style={[styles.description, { color: theme.muted.val }]}>{event.description}</Text>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>Thời gian</Text>
-          <Text style={styles.infoValue}>{formatEventDate(event.startsAt)}</Text>
-          <Text style={styles.infoLabel}>Địa điểm</Text>
-          <Text style={styles.infoValue}>{event.location}</Text>
-          <Text style={styles.infoLabel}>Đơn vị tổ chức</Text>
-          <Text style={styles.infoValue}>{event.organizer}</Text>
+        <View style={[styles.infoCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+          <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Thời gian</Text>
+          <Text style={[styles.infoValue, { color: theme.color.val }]}>{formatEventDate(event.startsAt)}</Text>
+          <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Địa điểm</Text>
+          <Text style={[styles.infoValue, { color: theme.color.val }]}>{event.location}</Text>
+          <Text style={[styles.infoLabel, { color: theme.muted.val }]}>Đơn vị tổ chức</Text>
+          <Text style={[styles.infoValue, { color: theme.color.val }]}>{event.organizer}</Text>
         </View>
 
         <View style={styles.statusRow}>
@@ -93,7 +95,7 @@ export default function EventDetailScreen() {
           ) : (
             <Pressable
               onPress={() => router.push({ pathname: '/check-in', params: { eventId: event.id } })}
-              style={styles.qrCheckInButton}>
+              style={[styles.qrCheckInButton, { backgroundColor: theme.primary.val }]}>
               <Text style={styles.qrButtonIcon}>📷</Text>
               <Text style={styles.qrButtonText}>Quét mã QR Check-in ngay</Text>
             </Pressable>
@@ -102,7 +104,7 @@ export default function EventDetailScreen() {
           {/* Member 4: Event Reminder Button */}
           <Pressable
             onPress={() => setReminderModalVisible(true)}
-            style={[styles.reminderButton, isReminderSet && styles.reminderButtonActive]}>
+            style={[styles.reminderButton, { backgroundColor: theme.surface.val, borderColor: theme.border.val }, isReminderSet && { borderColor: theme.primary.val }]}>
             <Text style={styles.reminderButtonIcon}>{isReminderSet ? '⏰' : '🔔'}</Text>
             <Text style={[styles.reminderButtonText, isReminderSet && styles.reminderButtonTextActive]}>
               {isReminderSet ? 'Đã đặt nhắc nhở (Bấm để đổi / hủy)' : 'Nhắc tôi khi sắp diễn ra'}
@@ -111,8 +113,8 @@ export default function EventDetailScreen() {
 
           <Pressable
             onPress={() => (saved ? unsaveEvent(event.id) : saveEvent(event.id))}
-            style={[styles.primaryButton, saved && styles.secondaryButton]}>
-            <Text style={[styles.primaryButtonText, saved && styles.secondaryButtonText]}>
+            style={[styles.primaryButton, { backgroundColor: theme.primary.val }, saved && { backgroundColor: theme.surface.val, borderColor: theme.danger.val }]}>
+            <Text style={[styles.primaryButtonText, saved && { color: theme.danger.val }]}>
               {saved ? 'Hủy lưu sự kiện' : 'Lưu vào lịch'}
             </Text>
           </Pressable>

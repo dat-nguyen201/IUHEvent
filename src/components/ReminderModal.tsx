@@ -1,6 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing } from '@/constants/app-theme';
+import { useTheme } from '@tamagui/core';
 
 type ReminderModalProps = {
   visible: boolean;
@@ -17,62 +18,63 @@ export function ReminderModal({
   onCancelReminder,
   isScheduled,
 }: ReminderModalProps) {
+  const theme = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={[styles.sheet, { backgroundColor: theme.surface.val }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={styles.title}>⏰ Nhắc nhở sự kiện</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: theme.color.val }]}>⏰ Nhắc nhở sự kiện</Text>
+            <Text style={[styles.subtitle, { color: theme.muted.val }]}>
               Chọn thời điểm bạn muốn nhận thông báo nhắc lịch trên thiết bị
             </Text>
           </View>
 
           <View style={styles.optionsList}>
             <Pressable
-              style={styles.optionItem}
+              style={[styles.optionItem, { backgroundColor: theme.background.val, borderColor: theme.border.val }]}
               onPress={() => {
                 onClose();
                 onSelectOption(15, false);
               }}>
               <Text style={styles.optionIcon}>⏳</Text>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>Trước 15 phút</Text>
-                <Text style={styles.optionDesc}>Chuẩn bị di chuyển đến địa điểm</Text>
+                <Text style={[styles.optionTitle, { color: theme.color.val }]}>Trước 15 phút</Text>
+                  <Text style={[styles.optionDesc, { color: theme.muted.val }]}>Chuẩn bị di chuyển đến địa điểm</Text>
               </View>
-              <Text style={styles.optionChevron}>›</Text>
+              <Text style={[styles.optionChevron, { color: theme.muted.val }]}>›</Text>
             </Pressable>
 
             <Pressable
-              style={styles.optionItem}
+              style={[styles.optionItem, { backgroundColor: theme.background.val, borderColor: theme.border.val }]}
               onPress={() => {
                 onClose();
                 onSelectOption(60, false);
               }}>
               <Text style={styles.optionIcon}>🕒</Text>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>Trước 1 giờ</Text>
-                <Text style={styles.optionDesc}>Sắp xếp công việc và học tập</Text>
+                <Text style={[styles.optionTitle, { color: theme.color.val }]}>Trước 1 giờ</Text>
+                  <Text style={[styles.optionDesc, { color: theme.muted.val }]}>Sắp xếp công việc và học tập</Text>
               </View>
-              <Text style={styles.optionChevron}>›</Text>
+              <Text style={[styles.optionChevron, { color: theme.muted.val }]}>›</Text>
             </Pressable>
 
             <Pressable
-              style={styles.optionItem}
+              style={[styles.optionItem, { backgroundColor: theme.background.val, borderColor: theme.border.val }]}
               onPress={() => {
                 onClose();
                 onSelectOption(1440, false);
               }}>
               <Text style={styles.optionIcon}>📅</Text>
               <View style={styles.optionTextContainer}>
-                <Text style={styles.optionTitle}>Trước 1 ngày (24 giờ)</Text>
-                <Text style={styles.optionDesc}>Lên kế hoạch trước cho ngày mai</Text>
+                <Text style={[styles.optionTitle, { color: theme.color.val }]}>Trước 1 ngày (24 giờ)</Text>
+                  <Text style={[styles.optionDesc, { color: theme.muted.val }]}>Lên kế hoạch trước cho ngày mai</Text>
               </View>
-              <Text style={styles.optionChevron}>›</Text>
+              <Text style={[styles.optionChevron, { color: theme.muted.val }]}>›</Text>
             </Pressable>
 
             <Pressable
-              style={[styles.optionItem, styles.demoOptionItem]}
+              style={[styles.optionItem, styles.demoOptionItem, { backgroundColor: theme.background.val, borderColor: theme.primary.val }]}
               onPress={() => {
                 onClose();
                 onSelectOption(0, true);
@@ -80,9 +82,9 @@ export function ReminderModal({
               <Text style={styles.optionIcon}>⚡</Text>
               <View style={styles.optionTextContainer}>
                 <Text style={[styles.optionTitle, styles.demoTitle]}>Thử nghiệm ngay (sau 5 giây)</Text>
-                <Text style={styles.optionDesc}>Dành cho chấm điểm và kiểm thử thông báo tức thì</Text>
+                <Text style={[styles.optionDesc, { color: theme.muted.val }]}>Dành cho chấm điểm và kiểm thử thông báo tức thì</Text>
               </View>
-              <Text style={styles.optionChevron}>›</Text>
+              <Text style={[styles.optionChevron, { color: theme.muted.val }]}>›</Text>
             </Pressable>
           </View>
 
@@ -93,12 +95,12 @@ export function ReminderModal({
                 onClose();
                 onCancelReminder();
               }}>
-              <Text style={styles.cancelReminderText}>Tắt / Hủy nhắc nhở này</Text>
+              <Text style={[styles.cancelReminderText, { color: theme.danger.val }]}>Tắt / Hủy nhắc nhở này</Text>
             </Pressable>
           )}
 
           <Pressable style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Đóng</Text>
+            <Text style={[styles.closeButtonText, { color: theme.color.val }]}>Đóng</Text>
           </Pressable>
         </Pressable>
       </Pressable>

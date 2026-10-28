@@ -22,6 +22,7 @@ import { studentEvents } from '@/data/events';
 import { getEventByIdSync } from '@/services/eventService';
 import type { StudentEvent } from '@/types/events';
 import { formatEventDate } from '@/utils/date';
+import { useTheme } from '@tamagui/core';
 
 export function parseEventQrCode(raw: string): string | null {
   const trimmed = raw.trim();
@@ -49,6 +50,7 @@ export function parseEventQrCode(raw: string): string | null {
 
 export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { eventId: preselectedEventId } = useLocalSearchParams<{ eventId?: string }>();
   const { checkedInEventIds, checkInEvent, isEventSaved, saveEvent } = useAppState();
 
@@ -130,13 +132,13 @@ export default function CheckInScreen() {
   const isWeb = Platform.OS === 'web';
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={[styles.container, { backgroundColor: theme.background.val, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* Top Header */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { backgroundColor: theme.surface.val, borderBottomColor: theme.border.val }]}>
         <Pressable onPress={() => router.back()} style={styles.circleButton}>
           <Text style={styles.buttonText}>✕</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Quét mã QR Check-in</Text>
+        <Text style={[styles.headerTitle, { color: theme.color.val }]}>Quét mã QR Check-in</Text>
         <View style={styles.headerRightActions}>
           {!isWeb && (
             <>
@@ -158,23 +160,23 @@ export default function CheckInScreen() {
       {/* Main Scanner or Permission Area */}
       <View style={styles.scannerWrapper}>
         {isWeb ? (
-          <View style={styles.fallbackContainer}>
+          <View style={[styles.fallbackContainer, { backgroundColor: theme.surface.val }]}>
             <Text style={styles.fallbackEmoji}>💻</Text>
-            <Text style={styles.fallbackTitle}>Chế độ Web / Mô phỏng</Text>
-            <Text style={styles.fallbackDesc}>
+            <Text style={[styles.fallbackTitle, { color: theme.color.val }]}>Chế độ Web / Mô phỏng</Text>
+            <Text style={[styles.fallbackDesc, { color: theme.muted.val }]}>
               Camera quét trực tiếp tối ưu trên thiết bị di động thật. Bạn có thể dùng ô nhập mã hoặc chọn sự kiện thử nghiệm bên dưới để kiểm tra điểm danh ngay!
             </Text>
           </View>
         ) : !permission ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Đang kiểm tra quyền camera...</Text>
+            <ActivityIndicator size="large" color={theme.primary.val} />
+            <Text style={[styles.loadingText, { color: theme.muted.val }]}>Đang kiểm tra quyền camera...</Text>
           </View>
         ) : !permission.granted ? (
-          <View style={styles.deniedContainer}>
+          <View style={[styles.deniedContainer, { backgroundColor: theme.surface.val }]}>
             <Text style={styles.deniedEmoji}>📷</Text>
-            <Text style={styles.deniedTitle}>Cần quyền truy cập Camera</Text>
-            <Text style={styles.deniedDesc}>
+            <Text style={[styles.deniedTitle, { color: theme.color.val }]}>Cần quyền truy cập Camera</Text>
+            <Text style={[styles.deniedDesc, { color: theme.muted.val }]}>
               IUH Event cần quyền camera để quét mã QR điểm danh tại sự kiện. Hãy cho phép để sử dụng tính năng này.
             </Text>
             <Pressable style={styles.grantButton} onPress={requestPermission}>
@@ -224,13 +226,13 @@ export default function CheckInScreen() {
         </Pressable>
 
         {showManualSection && (
-          <ScrollView style={styles.manualCard} showsVerticalScrollIndicator={false}>
-            <Text style={styles.manualLabel}>Nhập mã QR hoặc Event ID:</Text>
+          <ScrollView style={[styles.manualCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.manualLabel, { color: theme.color.val }]}>Nhập mã QR hoặc Event ID:</Text>
             <View style={styles.manualInputRow}>
               <TextInput
-                style={styles.manualInput}
+                style={[styles.manualInput, { backgroundColor: theme.background.val, borderColor: theme.border.val, color: theme.color.val }]}
                 placeholder="VD: event-1 hoặc student-event:event-1"
-                placeholderTextColor={colors.mutedText}
+                placeholderTextColor={theme.muted.val}
                 value={manualInput}
                 onChangeText={setManualInput}
                 autoCapitalize="none"

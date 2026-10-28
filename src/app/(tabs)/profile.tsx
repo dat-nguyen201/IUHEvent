@@ -6,50 +6,88 @@ import { Screen } from '@/components/Screen';
 import { colors, spacing } from '@/constants/app-theme';
 import { useAppState } from '@/context/AppStateContext';
 import { useAuth } from '@/context/AuthContext';
+import { useAppTheme, type ThemePreference } from '@/context/ThemeContext';
+import { useTheme } from '@tamagui/core';
 
 export default function ProfileScreen() {
   const { user, savedEventIds, checkedInEventIds } = useAppState();
   const { logout } = useAuth();
+  const theme = useTheme();
+  const { preference, setPreference } = useAppTheme();
+
+  const themeOptions: { value: ThemePreference; label: string }[] = [
+    { value: 'system', label: 'Theo thiết bị' },
+    { value: 'light', label: 'Sáng' },
+    { value: 'dark', label: 'Tối' },
+  ];
 
   return (
     <Screen>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>TÀI KHOẢN IUH</Text>
-          <Text style={styles.title}>Hồ sơ của tôi</Text>
+          <Text style={[styles.eyebrow, { color: theme.primary.val }]}>TÀI KHOẢN IUH</Text>
+          <Text style={[styles.title, { color: theme.color.val }]}>Hồ sơ của tôi</Text>
         </View>
 
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <View style={styles.identityRow}>
             <View style={styles.avatar}><Text style={styles.avatarText}>{user?.name.charAt(0) ?? 'S'}</Text></View>
             <View style={styles.identityCopy}>
-              <Text style={styles.name}>{user?.name ?? 'Sinh viên IUH'}</Text>
-              <Text style={styles.studentId}>{user?.studentId}</Text>
+              <Text style={[styles.name, { color: theme.color.val }]}>{user?.name ?? 'Sinh viên IUH'}</Text>
+              <Text style={[styles.studentId, { color: theme.muted.val }]}>{user?.studentId}</Text>
             </View>
             <Badge label={user?.id === 'admin' ? 'Admin demo' : 'Sinh viên'} tone="success" />
           </View>
-          <View style={styles.divider} />
-          <Text style={styles.detailLabel}>Email</Text>
-          <Text style={styles.detailValue}>{user?.email}</Text>
-          <Text style={styles.detailLabel}>Đơn vị</Text>
-          <Text style={styles.detailValue}>Trường Đại học Công nghiệp TP.HCM</Text>
+          <View style={[styles.divider, { backgroundColor: theme.border.val }]} />
+          <Text style={[styles.detailLabel, { color: theme.muted.val }]}>Email</Text>
+          <Text style={[styles.detailValue, { color: theme.color.val }]}>{user?.email}</Text>
+          <Text style={[styles.detailLabel, { color: theme.muted.val }]}>Đơn vị</Text>
+          <Text style={[styles.detailValue, { color: theme.color.val }]}>Trường Đại học Công nghiệp TP.HCM</Text>
         </View>
 
-        <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Hoạt động của bạn</Text></View>
-        <View style={styles.metrics}>
+        <View style={styles.sectionHeading}><Text style={[styles.sectionTitle, { color: theme.color.val }]}>Hoạt động của bạn</Text></View>
+        <View style={[styles.metrics, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <View style={styles.metric}>
-            <Text style={styles.metricValue}>{savedEventIds.length}</Text>
-            <Text style={styles.metricLabel}>Sự kiện đã lưu</Text>
+            <Text style={[styles.metricValue, { color: theme.color.val }]}>{savedEventIds.length}</Text>
+            <Text style={[styles.metricLabel, { color: theme.muted.val }]}>Sự kiện đã lưu</Text>
           </View>
-          <View style={styles.metricDivider} />
+          <View style={[styles.metricDivider, { backgroundColor: theme.border.val }]} />
           <View style={styles.metric}>
-            <Text style={styles.metricValue}>{checkedInEventIds.length}</Text>
-            <Text style={styles.metricLabel}>Lần check-in</Text>
+            <Text style={[styles.metricValue, { color: theme.color.val }]}>{checkedInEventIds.length}</Text>
+            <Text style={[styles.metricLabel, { color: theme.muted.val }]}>Lần check-in</Text>
           </View>
         </View>
 
-        <Pressable onPress={() => { void logout().then(() => router.replace('/auth')); }} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Đăng xuất</Text>
+        <View style={[styles.themeCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>Giao diện</Text>
+          <Text style={[styles.themeDescription, { color: theme.muted.val }]}>
+            Chọn chế độ hiển thị cho ứng dụng.
+          </Text>
+          <View style={styles.themeOptions}>
+            {themeOptions.map((option) => {
+              const selected = preference === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => void setPreference(option.value)}
+                  style={[
+                    styles.themeOption,
+                    { borderColor: selected ? theme.primary.val : theme.border.val },
+                    selected && { backgroundColor: theme.primary.val },
+                  ]}>
+                  <Text style={[styles.themeOptionText, { color: selected ? '#FFFFFF' : theme.color.val }]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <Pressable onPress={() => { void logout().then(() => router.replace('/auth')); }} style={[styles.logoutButton, { borderColor: theme.danger.val }]}>
+          <Text style={[styles.logoutText, { color: theme.danger.val }]}>Đăng xuất</Text>
         </Pressable>
       </ScrollView>
     </Screen>
@@ -74,6 +112,11 @@ const styles = StyleSheet.create({
   detailValue: { color: colors.text, fontSize: 13, fontWeight: '600', marginTop: -spacing.xs },
   sectionHeading: { marginBottom: -spacing.sm },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '900' },
+  themeCard: { borderRadius: 16, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
+  themeDescription: { fontSize: 13 },
+  themeOptions: { flexDirection: 'row', gap: spacing.xs },
+  themeOption: { alignItems: 'center', borderRadius: 10, borderWidth: 1, flex: 1, minHeight: 40, justifyContent: 'center', paddingHorizontal: spacing.xs },
+  themeOptionText: { fontSize: 12, fontWeight: '800' },
   metrics: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, borderWidth: 1, flexDirection: 'row', paddingVertical: spacing.md },
   metric: { alignItems: 'center', flex: 1, gap: 4 },
   metricDivider: { backgroundColor: colors.border, height: 34, width: 1 },

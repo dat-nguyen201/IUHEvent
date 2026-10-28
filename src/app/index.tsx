@@ -5,10 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
+import { useTheme } from '@tamagui/core';
 
 export default function IntroScreen() {
   const insets = useSafeAreaInsets();
   const { user, isReady, hasSeenGetStarted } = useAuth();
+  const theme = useTheme();
   const [introElapsed, setIntroElapsed] = useState(false);
 
   useEffect(() => {
@@ -24,11 +26,11 @@ export default function IntroScreen() {
   }, [introElapsed, isReady, user, hasSeenGetStarted]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}>
-      <View style={styles.brandMark}><Text style={styles.brandMarkText}>IUH</Text></View>
-      <Text style={styles.brand}>IUH Event</Text>
-      <Text style={styles.tagline}>Cùng bạn đến mọi sự kiện</Text>
-      <ActivityIndicator style={styles.loader} color={colors.primary} />
+    <View style={[styles.container, { backgroundColor: theme.background.val, paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}>
+      <View style={[styles.brandMark, { backgroundColor: theme.primary.val }]}><Text style={styles.brandMarkText}>IUH</Text></View>
+      <Text style={[styles.brand, { color: theme.color.val }]}>IUH Event</Text>
+      <Text style={[styles.tagline, { color: theme.muted.val }]}>Cùng bạn đến mọi sự kiện</Text>
+      <ActivityIndicator style={styles.loader} color={theme.primary.val} />
     </View>
   );
 }

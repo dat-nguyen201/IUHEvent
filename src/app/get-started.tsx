@@ -7,10 +7,12 @@ import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
 import { studentEvents } from '@/data/events';
 import { getSafeEventRedirect } from '@/utils/event-links';
+import { useTheme } from '@tamagui/core';
 
 export default function GetStartedScreen() {
   const { redirect } = useLocalSearchParams<{ redirect?: string | string[] }>();
   const { user, finishGetStarted } = useAuth();
+  const theme = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,8 +40,8 @@ export default function GetStartedScreen() {
         <View style={styles.stepRow}>
           <View style={styles.stepActive} /><View style={styles.stepInactive} /><View style={styles.stepInactive} />
         </View>
-        <Text style={styles.title}>Sẵn sàng hòa mình vào IUH?</Text>
-        <Text style={styles.description}>Khám phá hoạt động mới, lưu sự kiện vào lịch cá nhân và chuẩn bị check-in ngay trong một ứng dụng.</Text>
+        <Text style={[styles.title, { color: theme.color.val }]}>Sẵn sàng hòa mình vào IUH?</Text>
+        <Text style={[styles.description, { color: theme.muted.val }]}>Khám phá hoạt động mới, lưu sự kiện vào lịch cá nhân và chuẩn bị check-in ngay trong một ứng dụng.</Text>
 
         <View style={styles.features}>
           <Feature number="01" title="Khám phá" detail="Tìm sự kiện theo chủ đề và thời gian" tone={styles.featureBlue} />
@@ -50,8 +52,8 @@ export default function GetStartedScreen() {
         <Pressable disabled={busy} onPress={continueToApp} style={styles.primaryButton}>
           {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Bắt đầu khám phá</Text>}
         </Pressable>
-        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        <Text style={styles.footer}>Cộng đồng sự kiện sinh viên IUH</Text>
+        {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
+        <Text style={[styles.footer, { color: theme.muted.val }]}>Cộng đồng sự kiện sinh viên IUH</Text>
       </View>
       </ScrollView>
     </Screen>
@@ -59,12 +61,13 @@ export default function GetStartedScreen() {
 }
 
 function Feature({ number, title, detail, tone }: { number: string; title: string; detail: string; tone: object }) {
+  const theme = useTheme();
   return (
     <View style={styles.featureRow}>
-      <View style={[styles.featureNumber, tone]}><Text style={styles.featureNumberText}>{number}</Text></View>
+      <View style={[styles.featureNumber, tone, { backgroundColor: theme.surface.val, borderColor: theme.border.val, borderWidth: 1 }]}><Text style={[styles.featureNumberText, { color: theme.color.val }]}>{number}</Text></View>
       <View style={styles.featureCopy}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDetail}>{detail}</Text>
+        <Text style={[styles.featureTitle, { color: theme.color.val }]}>{title}</Text>
+        <Text style={[styles.featureDetail, { color: theme.muted.val }]}>{detail}</Text>
       </View>
     </View>
   );

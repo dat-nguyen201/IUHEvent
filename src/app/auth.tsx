@@ -17,12 +17,14 @@ import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
 import { getSafeEventRedirect } from '@/utils/event-links';
+import { useTheme } from '@tamagui/core';
 
 type AuthMode = 'login' | 'register';
 
 export default function AuthScreen() {
   const { redirect: redirectParam } = useLocalSearchParams<{ redirect?: string | string[] }>();
   const { login, register, hasSeenGetStarted } = useAuth();
+  const theme = useTheme();
   const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
   const [studentId, setStudentId] = useState('');
@@ -85,25 +87,25 @@ export default function AuthScreen() {
           <View style={styles.brandRow}>
             <View style={styles.brandMark}><Text style={styles.brandMarkText}>IUH</Text></View>
             <View>
-              <Text style={styles.eyebrow}>IUH EVENT</Text>
-              <Text style={styles.brandTitle}>Đồng hành sự kiện sinh viên</Text>
+              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT</Text>
+              <Text style={[styles.brandTitle, { color: theme.color.val }]}>Đồng hành sự kiện sinh viên</Text>
             </View>
           </View>
 
           <View style={styles.intro}>
-            <Text style={styles.title}>{mode === 'login' ? 'Chào mừng bạn trở lại' : 'Tạo tài khoản'}</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: theme.color.val }]}>{mode === 'login' ? 'Chào mừng bạn trở lại' : 'Tạo tài khoản'}</Text>
+            <Text style={[styles.subtitle, { color: theme.muted.val }]}>
               {mode === 'login' ? 'Đăng nhập để theo dõi sự kiện và lịch cá nhân.' : 'Bắt đầu kết nối với các hoạt động tại IUH.'}
             </Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={[styles.form, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
             <View style={styles.segment}>
-              <Pressable onPress={() => { setMode('login'); setError(''); }} style={[styles.segmentButton, mode === 'login' && styles.segmentActive]}>
-                <Text style={[styles.segmentText, mode === 'login' && styles.segmentTextActive]}>Đăng nhập</Text>
+              <Pressable onPress={() => { setMode('login'); setError(''); }} style={[styles.segmentButton, mode === 'login' && { backgroundColor: theme.primary.val }]}>
+                <Text style={[styles.segmentText, { color: mode === 'login' ? '#FFFFFF' : theme.muted.val }]}>Đăng nhập</Text>
               </Pressable>
-              <Pressable onPress={() => { setMode('register'); setError(''); }} style={[styles.segmentButton, mode === 'register' && styles.segmentActive]}>
-                <Text style={[styles.segmentText, mode === 'register' && styles.segmentTextActive]}>Đăng ký</Text>
+              <Pressable onPress={() => { setMode('register'); setError(''); }} style={[styles.segmentButton, mode === 'register' && { backgroundColor: theme.primary.val }]}>
+                <Text style={[styles.segmentText, { color: mode === 'register' ? '#FFFFFF' : theme.muted.val }]}>Đăng ký</Text>
               </Pressable>
             </View>
 
@@ -124,15 +126,15 @@ export default function AuthScreen() {
             {mode === 'register' ? <Field label="Nhập lại mật khẩu" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Nhập lại mật khẩu" secureTextEntry={!showPassword} /> : null}
 
             <Pressable onPress={() => setShowPassword((value) => !value)} style={styles.visibilityButton}>
-              <Text style={styles.visibilityText}>{showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</Text>
+              <Text style={[styles.visibilityText, { color: theme.primary.val }]}>{showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</Text>
             </Pressable>
-            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+            {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
 
             <Pressable disabled={busy} onPress={submit} style={[styles.primaryButton, busy && styles.disabledButton]}>
               {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}</Text>}
             </Pressable>
-            {mode === 'login' ? <Text style={styles.adminHint}>Tài khoản admin dùng thử: admin / 123456789</Text> : null}
-            <Text style={styles.disclaimer}>Tài khoản demo được lưu trên thiết bị này. Đây chưa phải dịch vụ xác thực chính thức.</Text>
+            {mode === 'login' ? <Text style={[styles.adminHint, { color: theme.primary.val }]}>Tài khoản admin dùng thử: admin / 123456789</Text> : null}
+            <Text style={[styles.disclaimer, { color: theme.muted.val }]}>Tài khoản demo được lưu trên thiết bị này. Đây chưa phải dịch vụ xác thực chính thức.</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -143,13 +145,16 @@ export default function AuthScreen() {
 type FieldProps = ComponentProps<typeof TextInput> & { label: string };
 
 function Field({ label, style, ...props }: FieldProps) {
+  const theme = useTheme();
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.muted.val }]}>{label}</Text>
       <TextInput
         {...props}
-        style={[styles.input, style]}
-        placeholderTextColor={colors.mutedText}
+        placeholderTextColor={theme.muted.val}
+        selectionColor={theme.primary.val}
+        cursorColor={theme.primary.val}
+        style={[styles.input, { color: theme.color.val, borderColor: theme.border.val }, style]}
         returnKeyType="next"
       />
     </View>

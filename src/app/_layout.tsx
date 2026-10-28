@@ -2,20 +2,18 @@ import { router, Stack, useLocalSearchParams, useSegments } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useColorScheme } from 'react-native';
 import { TamaguiProvider } from '@tamagui/core';
+import { StatusBar } from 'expo-status-bar';
 
 import { AppStateProvider } from '@/context/AppStateContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider, useAppTheme } from '@/context/ThemeContext';
 import { getSafeEventRedirect } from '@/utils/event-links';
 import { tamaguiConfig } from '../../tamagui.config';
 
 import { addNotificationResponseListener } from '@/services/notificationService';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const defaultTheme = colorScheme === 'dark' ? 'dark' : 'light';
-
   useEffect(() => {
     const unsubscribe = addNotificationResponseListener((eventId) => {
       router.push({ pathname: '/events/[id]', params: { id: eventId } });
@@ -26,9 +24,20 @@ export default function RootLayout() {
   }, []);
 
   return (
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
+  );
+}
+
+function ThemedApp() {
+  const { colorScheme } = useAppTheme();
+
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <TamaguiProvider config={tamaguiConfig} defaultTheme={defaultTheme}>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme}>
           <AppStateProvider>
             <AuthProvider>
               <RouteGuard />

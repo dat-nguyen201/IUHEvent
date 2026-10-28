@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { Badge } from '@/components/Badge';
 import { Screen } from '@/components/Screen';
@@ -10,11 +11,13 @@ import { useAppState } from '@/context/AppStateContext';
 import { getEventByIdSync } from '@/services/eventService';
 import type { StudentEvent } from '@/types/events';
 import { formatEventDate, isFutureEvent } from '@/utils/date';
+import { useTheme } from '@tamagui/core';
 
 type ScheduleRow = { type: 'section'; title: string } | { type: 'event'; event: StudentEvent };
 
 export default function ScheduleScreen() {
   const { savedEventIds, checkedInEventIds, unsaveEvent } = useAppState();
+  const theme = useTheme();
 
   const rows = useMemo<ScheduleRow[]>(() => {
     const savedEvents = savedEventIds
@@ -34,8 +37,8 @@ export default function ScheduleScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={styles.title}>Lịch của tôi</Text>
-        <Text style={styles.subtitle}>Các sự kiện bạn đã lưu sẽ xuất hiện ở đây.</Text>
+        <Text style={[styles.title, { color: theme.color.val }]}>Lịch của tôi</Text>
+        <Text style={[styles.subtitle, { color: theme.muted.val }]}>Các sự kiện bạn đã lưu sẽ xuất hiện ở đây.</Text>
       </View>
 
       <FlatList
@@ -45,22 +48,22 @@ export default function ScheduleScreen() {
         contentContainerStyle={rows.length === 0 ? styles.emptyList : styles.listContent}
         renderItem={({ item }) => {
           if (item.type === 'section') {
-            return <Text style={styles.sectionTitle}>{item.title}</Text>;
+            return <Text style={[styles.sectionTitle, { color: theme.color.val }]}>{item.title}</Text>;
           }
 
           const isCheckedIn = checkedInEventIds.includes(item.event.id);
           return (
             <Pressable
               onPress={() => router.push({ pathname: '/events/[id]', params: { id: item.event.id } })}
-              style={styles.card}>
+              style={[styles.card, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleWrap}>
-                  <Text style={styles.eventTitle}>{item.event.title}</Text>
-                  <Text style={styles.eventMeta}>{formatEventDate(item.event.startsAt)}</Text>
+                  <Text style={[styles.eventTitle, { color: theme.color.val }]}>{item.event.title}</Text>
+                  <Text style={[styles.eventMeta, { color: theme.muted.val }]}>{formatEventDate(item.event.startsAt)}</Text>
                 </View>
                 <Badge label="Đã lưu" tone="success" />
               </View>
-              <Text style={styles.location}>{item.event.location}</Text>
+              <Text style={[styles.location, { color: theme.muted.val }]}>{item.event.location}</Text>
               <View style={styles.cardFooter}>
                 <Badge label={isCheckedIn ? 'Đã check-in' : 'Chưa check-in'} tone={isCheckedIn ? 'success' : 'neutral'} />
                 <View style={styles.footerActions}>
@@ -70,8 +73,9 @@ export default function ScheduleScreen() {
                         e.stopPropagation();
                         router.push({ pathname: '/check-in', params: { eventId: item.event.id } });
                       }}
-                      style={styles.checkInQuickButton}>
-                      <Text style={styles.checkInQuickText}>📷 Quét QR</Text>
+                      style={[styles.checkInQuickButton, { backgroundColor: theme.primary.val }]}>
+                      <Ionicons color="#FFFFFF" name="scan-outline" size={14} />
+                      <Text style={styles.checkInQuickText}>Quét QR</Text>
                     </Pressable>
                   )}
                   <Pressable
@@ -79,8 +83,8 @@ export default function ScheduleScreen() {
                       event.stopPropagation();
                       unsaveEvent(item.event.id);
                     }}
-                    style={styles.removeButton}>
-                    <Text style={styles.removeButtonText}>Hủy lưu</Text>
+                    style={[styles.removeButton, { borderColor: theme.danger.val }]}>
+                    <Text style={[styles.removeButtonText, { color: theme.danger.val }]}>Hủy lưu</Text>
                   </Pressable>
                 </View>
               </View>
@@ -184,13 +188,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   checkInQuickButton: {
+    alignItems: 'center',
     backgroundColor: '#0F172A',
     borderRadius: 999,
+    flexDirection: 'row',
+    gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
   checkInQuickText: {
-    color: '#38BDF8',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },

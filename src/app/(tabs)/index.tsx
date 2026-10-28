@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { Badge } from '@/components/Badge';
 import { Screen } from '@/components/Screen';
@@ -10,11 +12,11 @@ import { eventCategories } from '@/data/events';
 import { formatEventDate, isFutureEvent } from '@/utils/date';
 import type { StudentEvent } from '@/types/events';
 import { getEvents } from '@/services/eventService';
-
-const categoryColors = ['#E6F0FF', '#E7F6ED', '#FFF2D9', '#FBE9EF'];
+import { useTheme } from '@tamagui/core';
 
 export default function HomeScreen() {
   const { user, savedEventIds, checkedInEventIds } = useAppState();
+  const theme = useTheme();
   
   const [upcomingEvents, setUpcomingEvents] = useState<StudentEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,8 +45,8 @@ export default function HomeScreen() {
     return (
       <Screen>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={{ marginTop: 10, color: colors.mutedText }}>Đang tải sự kiện...</Text>
+          <ActivityIndicator size="large" color={theme.primary.val} />
+          <Text style={{ marginTop: 10, color: theme.muted.val }}>Đang tải sự kiện...</Text>
         </View>
       </Screen>
     );
@@ -55,79 +57,120 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <View style={styles.greeting}>
-            <Text style={styles.eyebrow}>IUH EVENT</Text>
-            <Text style={styles.greetingTitle}>Chào {user?.name.split(' ').at(-1) ?? 'bạn'}!</Text>
-            <Text style={styles.subtitle}>Hôm nay bạn muốn tham gia điều gì?</Text>
+            <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT</Text>
+            <Text style={[styles.greetingTitle, { color: theme.color.val }]}>Chào {user?.name.split(' ').at(-1) ?? 'bạn'}!</Text>
+            <Text style={[styles.subtitle, { color: theme.muted.val }]}>Hôm nay bạn muốn tham gia điều gì?</Text>
           </View>
           <Pressable onPress={() => router.push('/(tabs)/profile')} style={styles.avatar}>
             <Text style={styles.avatarText}>{user?.name.charAt(0) ?? 'S'}</Text>
           </Pressable>
         </View>
 
-        <Pressable onPress={() => router.push('/(tabs)/discover')} style={styles.searchBox}>
+        <Pressable onPress={() => router.push('/(tabs)/discover')} style={[styles.searchBox, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Text style={styles.searchIcon}>⌕</Text>
-          <Text style={styles.searchPlaceholder}>Tìm sự kiện, địa điểm...</Text>
+          <Text style={[styles.searchPlaceholder, { color: theme.muted.val }]}>Tìm sự kiện, địa điểm...</Text>
           <Text style={styles.searchFilter}>☷</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push('/check-in')} style={styles.quickQrBanner}>
+        <Pressable onPress={() => router.push('/check-in')} style={[styles.quickQrBanner, { backgroundColor: theme.surface.val, borderColor: theme.border.val, borderWidth: 1 }]}>
           <View style={styles.quickQrIconWrap}>
             <Text style={styles.quickQrIcon}>📷</Text>
           </View>
           <View style={styles.quickQrTextWrap}>
-            <Text style={styles.quickQrTitle}>Quét mã QR Check-in</Text>
-            <Text style={styles.quickQrSub}>Điểm danh nhanh sự kiện bạn đang tham gia</Text>
+            <Text style={[styles.quickQrTitle, { color: theme.color.val }]}>Quét mã QR Check-in</Text>
+            <Text style={[styles.quickQrSub, { color: theme.muted.val }]}>Điểm danh nhanh sự kiện bạn đang tham gia</Text>
           </View>
           <Text style={styles.quickQrChevron}>›</Text>
         </Pressable>
 
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>Sự kiện sắp tới</Text>
-          <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={styles.link}>Xem tất cả</Text></Pressable>
+          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>Sự kiện sắp tới</Text>
+          <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={[styles.link, { color: theme.primary.val }]}>Xem tất cả</Text></Pressable>
         </View>
-        {featured ? <FeaturedEvent event={featured} /> : <View style={styles.noEvent}><Text style={styles.noEventText}>Chưa có sự kiện sắp tới.</Text></View>}
+        {featured ? <FeaturedEvent event={featured} /> : <View style={[styles.noEvent, { backgroundColor: theme.surface.val }]}><Text style={[styles.noEventText, { color: theme.muted.val }]}>Chưa có sự kiện sắp tới.</Text></View>}
 
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Pressable onPress={() => router.push('/(tabs)/schedule')} style={styles.statItem}>
-            <Text style={styles.statValue}>{savedEventIds.length}</Text>
-            <Text style={styles.statLabel}>Đã lưu</Text>
+            <Text style={[styles.statValue, { color: theme.color.val }]}>{savedEventIds.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted.val }]}>Đã lưu</Text>
           </Pressable>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border.val }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{checkedInEventIds.length}</Text>
-            <Text style={styles.statLabel}>Đã check-in</Text>
+            <Text style={[styles.statValue, { color: theme.color.val }]}>{checkedInEventIds.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted.val }]}>Đã check-in</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.border.val }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{upcomingEvents.length}</Text>
-            <Text style={styles.statLabel}>Sắp diễn ra</Text>
+            <Text style={[styles.statValue, { color: theme.color.val }]}>{upcomingEvents.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.muted.val }]}>Sắp diễn ra</Text>
           </View>
         </View>
 
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>Danh mục</Text>
-          <Text style={styles.sectionHint}>Chọn chủ đề bạn thích</Text>
+          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>Danh mục</Text>
+          <Text style={[styles.sectionHint, { color: theme.muted.val }]}>Chọn chủ đề bạn thích</Text>
         </View>
         <View style={styles.categoryGrid}>
           {eventCategories.map((category, index) => (
-            <Pressable
+            <CategoryTile
               key={category}
+              category={category}
+              index={index}
               onPress={() => router.push({ pathname: '/(tabs)/discover', params: { category } })}
-              style={[styles.categoryTile, { backgroundColor: categoryColors[index] }]}>
-              <Text style={styles.categoryDot}>{['✦', '◎', '♡', '♫'][index]}</Text>
-              <Text style={styles.categoryLabel}>{category}</Text>
-            </Pressable>
+            />
           ))}
         </View>
 
         <View style={styles.sectionHeading}>
-          <Text style={styles.sectionTitle}>Có thể bạn quan tâm</Text>
-          <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={styles.link}>Khám phá</Text></Pressable>
+          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>Có thể bạn quan tâm</Text>
+          <Pressable onPress={() => router.push('/(tabs)/discover')}><Text style={[styles.link, { color: theme.primary.val }]}>Khám phá</Text></Pressable>
         </View>
         {upcomingEvents.slice(1, 4).map((event) => <SmallEvent key={event.id} event={event} />)}
         <View style={styles.bottomSpace} />
       </ScrollView>
     </Screen>
+  );
+}
+
+const categoryIcons = ['school-outline', 'people-outline', 'heart-outline', 'musical-notes-outline'] as const;
+const categoryColors = [
+  { background: '#E8F1FF', icon: '#3478F6' },
+  { background: '#FFF0E6', icon: '#F07836' },
+  { background: '#EAF8F1', icon: '#20A66A' },
+  { background: '#F3ECFF', icon: '#8B5CF6' },
+] as const;
+
+function CategoryTile({
+  category,
+  index,
+  onPress,
+}: {
+  category: string;
+  index: number;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const palette = categoryColors[index % categoryColors.length];
+
+  return (
+    <Animated.View style={[styles.categoryTileWrap, animatedStyle]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => {
+          scale.set(withSpring(0.96, { damping: 14, stiffness: 280 }));
+        }}
+        onPressOut={() => {
+          scale.set(withSpring(1, { damping: 14, stiffness: 280 }));
+        }}
+        style={[styles.categoryTile, { backgroundColor: palette.background }]}>
+        <View style={[styles.categoryIconWrap, { backgroundColor: `${palette.icon}18` }]}>
+          <Ionicons color={palette.icon} name={categoryIcons[index % categoryIcons.length]} size={23} />
+        </View>
+        <Text style={styles.categoryLabel}>{category}</Text>
+        <Ionicons color={palette.icon} name="arrow-forward-outline" size={15} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -148,15 +191,16 @@ function FeaturedEvent({ event }: { event: StudentEvent }) {
 }
 
 function SmallEvent({ event }: { event: StudentEvent }) {
+  const theme = useTheme();
   return (
     <Pressable onPress={() => router.push({ pathname: '/events/[id]', params: { id: event.id } })} style={styles.smallEvent}>
       <Image source={event.image} resizeMode="cover" style={styles.smallImage} />
       <View style={styles.smallCopy}>
-        <Text style={styles.smallCategory}>{event.category}</Text>
-        <Text style={styles.smallTitle} numberOfLines={2}>{event.title}</Text>
-        <Text style={styles.smallMeta}>{formatEventDate(event.startsAt)} · {event.location}</Text>
+        <Text style={[styles.smallCategory, { color: theme.primary.val }]}>{event.category}</Text>
+        <Text style={[styles.smallTitle, { color: theme.color.val }]} numberOfLines={2}>{event.title}</Text>
+        <Text style={[styles.smallMeta, { color: theme.muted.val }]}>{formatEventDate(event.startsAt)} · {event.location}</Text>
       </View>
-      <Text style={styles.chevron}>›</Text>
+      <Text style={[styles.chevron, { color: theme.muted.val }]}>›</Text>
     </Pressable>
   );
 }
@@ -196,9 +240,18 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.mutedText, fontSize: 11 },
   statDivider: { backgroundColor: colors.border, height: 32, width: 1 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  categoryTile: { alignItems: 'center', borderRadius: 14, flex: 1, gap: spacing.xs, minWidth: '46%', paddingVertical: spacing.md },
-  categoryDot: { color: colors.text, fontSize: 19, fontWeight: '800' },
-  categoryLabel: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  categoryTileWrap: { flexBasis: '47%', flexGrow: 1 },
+  categoryTile: {
+    alignItems: 'center',
+    borderRadius: 20,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 82,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  categoryIconWrap: { alignItems: 'center', borderRadius: 15, height: 46, justifyContent: 'center', width: 46 },
+  categoryLabel: { color: '#172033', flex: 1, fontSize: 12, fontWeight: '900' },
   smallEvent: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, padding: spacing.sm },
   smallImage: { backgroundColor: colors.border, borderRadius: 10, height: 66, width: 66 },
   smallCopy: { flex: 1, gap: 3 },
