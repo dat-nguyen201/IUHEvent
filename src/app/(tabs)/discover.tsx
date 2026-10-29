@@ -332,7 +332,7 @@ export default function DiscoverScreen() {
               onAction={() => { setQuery(''); setCategory(allCategories); }}
             />
           }
-          ListFooterComponent={renderFooter()}
+          ListFooterComponent={renderFooter() ?? undefined}
         />
       )}
 
