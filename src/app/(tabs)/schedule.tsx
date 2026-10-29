@@ -1,81 +1,179 @@
-import { router } from 'expo-router';
-import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { Badge } from '@/components/Badge';
-import { Screen } from '@/components/Screen';
-import { StatusMessage } from '@/components/StatusMessage';
-import { colors, spacing } from '@/constants/app-theme';
-import { useAppState } from '@/context/AppStateContext';
-import { getEventByIdSync } from '@/services/eventService';
-import type { StudentEvent } from '@/types/events';
-import { formatEventDate, isFutureEvent } from '@/utils/date';
-import { useTheme } from '@tamagui/core';
+import { Badge } from "@/components/Badge";
+import { Screen } from "@/components/Screen";
+import { StatusMessage } from "@/components/StatusMessage";
+import { colors, spacing } from "@/constants/app-theme";
+import { useAppState } from "@/context/AppStateContext";
+import { getEventByIdSync } from "@/services/eventService";
+import type { StudentEvent } from "@/types/events";
+import { formatEventDate, isFutureEvent } from "@/utils/date";
+import { useTheme } from "@tamagui/core";
 
-type ScheduleRow = { type: 'section'; title: string } | { type: 'event'; event: StudentEvent };
+type ScheduleRow =
+  | { type: "section"; title: string }
+  | { type: "event"; event: StudentEvent };
 
 export default function ScheduleScreen() {
   const { savedEventIds, checkedInEventIds, unsaveEvent } = useAppState();
   const theme = useTheme();
+  const params = useLocalSearchParams<{ filter?: string | string[] }>();
+  const filterMode = Array.isArray(params.filter)
+    ? params.filter[0]
+    : (params.filter ?? "saved");
 
   const rows = useMemo<ScheduleRow[]>(() => {
     const savedEvents = savedEventIds
       .map((id) => getEventByIdSync(id))
       .filter((event): event is StudentEvent => Boolean(event))
-      .sort((first, second) => new Date(first.startsAt).getTime() - new Date(second.startsAt).getTime());
+      .sort(
+        (first, second) =>
+          new Date(first.startsAt).getTime() -
+          new Date(second.startsAt).getTime(),
+      );
 
-    const upcoming = savedEvents.filter((event) => isFutureEvent(event.startsAt));
-    const past = savedEvents.filter((event) => !isFutureEvent(event.startsAt));
+    const visibleEvents =
+      filterMode === "checkedIn"
+        ? savedEvents.filter((event) => checkedInEventIds.includes(event.id))
+        : savedEvents;
+
+    const upcoming = visibleEvents.filter((event) =>
+      isFutureEvent(event.startsAt),
+    );
+    const past = visibleEvents.filter(
+      (event) => !isFutureEvent(event.startsAt),
+    );
 
     return [
-      ...(upcoming.length > 0 ? [{ type: 'section' as const, title: 'Sắp diễn ra' }, ...upcoming.map((event) => ({ type: 'event' as const, event }))] : []),
-      ...(past.length > 0 ? [{ type: 'section' as const, title: 'Đã qua' }, ...past.map((event) => ({ type: 'event' as const, event }))] : []),
+      ...(upcoming.length > 0
+        ? [
+            { type: "section" as const, title: "Sắp diễn ra" },
+            ...upcoming.map((event) => ({ type: "event" as const, event })),
+          ]
+        : []),
+      ...(past.length > 0
+        ? [
+            { type: "section" as const, title: "Đã qua" },
+            ...past.map((event) => ({ type: "event" as const, event })),
+          ]
+        : []),
     ];
-  }, [savedEventIds]);
+  }, [checkedInEventIds, filterMode, savedEventIds]);
 
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.color.val }]}>Lịch của tôi</Text>
-        <Text style={[styles.subtitle, { color: theme.muted.val }]}>Các sự kiện bạn đã lưu sẽ xuất hiện ở đây.</Text>
+        <Text style={[styles.title, { color: theme.color.val }]}>
+          {filterMode === "checkedIn" ? "Sự kiện đã check-in" : "Lịch của tôi"}
+        </Text>
+        <Text style={[styles.subtitle, { color: theme.color.val }]}>
+          {filterMode === "checkedIn"
+            ? "Các sự kiện bạn đã điểm danh sẽ xuất hiện ở đây."
+            : "Các sự kiện bạn đã lưu sẽ xuất hiện ở đây."}
+        </Text>
       </View>
 
       <FlatList
         style={styles.list}
         data={rows}
-        keyExtractor={(item) => (item.type === 'section' ? item.title : item.event.id)}
-        contentContainerStyle={rows.length === 0 ? styles.emptyList : styles.listContent}
+        keyExtractor={(item) =>
+          item.type === "section" ? item.title : item.event.id
+        }
+        contentContainerStyle={
+          rows.length === 0
+            ? { flexGrow: 1, justifyContent: "center" }
+            : styles.listContent
+        }
         renderItem={({ item }) => {
-          if (item.type === 'section') {
-            return <Text style={[styles.sectionTitle, { color: theme.color.val }]}>{item.title}</Text>;
+          if (item.type === "section") {
+            return (
+              <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+                {item.title}
+              </Text>
+            );
           }
 
           const isCheckedIn = checkedInEventIds.includes(item.event.id);
+          const isExpired = !isFutureEvent(item.event.startsAt);
+
           return (
             <Pressable
-              onPress={() => router.push({ pathname: '/events/[id]', params: { id: item.event.id } })}
-              style={[styles.card, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+              onPress={() =>
+                router.push({
+                  pathname: "/events/[id]",
+                  params: { id: item.event.id },
+                })
+              }
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.surface.val,
+                  borderColor: theme.border.val,
+                },
+              ]}
+            >
               <View style={styles.cardHeader}>
                 <View style={styles.cardTitleWrap}>
-                  <Text style={[styles.eventTitle, { color: theme.color.val }]}>{item.event.title}</Text>
-                  <Text style={[styles.eventMeta, { color: theme.muted.val }]}>{formatEventDate(item.event.startsAt)}</Text>
+                  <Text style={[styles.eventTitle, { color: theme.color.val }]}>
+                    {item.event.title}
+                  </Text>
+                  <Text style={[styles.eventMeta, { color: theme.color.val }]}>
+                    {formatEventDate(item.event.startsAt)}
+                  </Text>
                 </View>
-                <Badge label="Đã lưu" tone="success" />
+                <Badge
+                  label={isExpired ? "Đã kết thúc" : "Đã lưu"}
+                  tone={isExpired ? "neutral" : "success"}
+                />
               </View>
-              <Text style={[styles.location, { color: theme.muted.val }]}>{item.event.location}</Text>
+              <Text style={[styles.location, { color: theme.color.val }]}>
+                {item.event.location}
+              </Text>
               <View style={styles.cardFooter}>
-                <Badge label={isCheckedIn ? 'Đã check-in' : 'Chưa check-in'} tone={isCheckedIn ? 'success' : 'neutral'} />
+                <Badge
+                  label={isCheckedIn ? "Đã check-in" : "Chưa check-in"}
+                  tone={isCheckedIn ? "success" : "neutral"}
+                />
                 <View style={styles.footerActions}>
                   {!isCheckedIn && (
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        router.push({ pathname: '/check-in', params: { eventId: item.event.id } });
+                        if (isExpired) {
+                          Alert.alert(
+                            "Sự kiện đã kết thúc",
+                            "Sự kiện này đã kết thúc, bạn không thể check-in hoặc quét QR nữa.",
+                          );
+                          return;
+                        }
+                        router.push({
+                          pathname: "/check-in",
+                          params: { eventId: item.event.id },
+                        });
                       }}
-                      style={[styles.checkInQuickButton, { backgroundColor: theme.primary.val }]}>
+                      style={[
+                        styles.checkInQuickButton,
+                        {
+                          backgroundColor: isExpired
+                            ? "#94A3B8"
+                            : theme.primary.val,
+                        },
+                      ]}
+                    >
                       <Ionicons color="#FFFFFF" name="scan-outline" size={14} />
-                      <Text style={styles.checkInQuickText}>Quét QR</Text>
+                      <Text style={styles.checkInQuickText}>
+                        {isExpired ? "Đã kết thúc" : "Quét QR"}
+                      </Text>
                     </Pressable>
                   )}
                   <Pressable
@@ -83,8 +181,19 @@ export default function ScheduleScreen() {
                       event.stopPropagation();
                       unsaveEvent(item.event.id);
                     }}
-                    style={[styles.removeButton, { borderColor: theme.danger.val }]}>
-                    <Text style={[styles.removeButtonText, { color: theme.danger.val }]}>Hủy lưu</Text>
+                    style={[
+                      styles.removeButton,
+                      { borderColor: theme.danger.val },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.removeButtonText,
+                        { color: theme.danger.val },
+                      ]}
+                    >
+                      Hủy lưu
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -92,12 +201,27 @@ export default function ScheduleScreen() {
           );
         }}
         ListEmptyComponent={
-          <StatusMessage
-            title="Bạn chưa lưu sự kiện nào"
-            message="Vào tab Khám phá, chọn một sự kiện và bấm Lưu vào lịch để bắt đầu."
-            actionLabel="Khám phá sự kiện"
-            onAction={() => router.push('/(tabs)/discover')}
-          />
+          <View
+            style={[
+              styles.emptyState,
+              {
+                backgroundColor: theme.surface.val,
+                borderColor: theme.border.val,
+              },
+            ]}
+          >
+            <StatusMessage
+              title="Bạn chưa lưu sự kiện nào"
+              message="Vào tab Khám phá, chọn một sự kiện và bấm Lưu vào lịch để bắt đầu."
+              actionLabel="Khám phá sự kiện"
+              onAction={() =>
+                router.push({
+                  pathname: "/(tabs)/discover",
+                  params: { focusSearch: "1" },
+                })
+              }
+            />
+          </View>
         }
       />
     </Screen>
@@ -110,12 +234,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: {
-    color: colors.text,
     fontSize: 30,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   subtitle: {
-    color: colors.mutedText,
     fontSize: 15,
   },
   list: {
@@ -128,12 +250,17 @@ const styles = StyleSheet.create({
   },
   emptyList: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
+  },
+  emptyState: {
+    borderRadius: 18,
+    borderWidth: 1,
+    marginVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   sectionTitle: {
-    color: colors.text,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: "800",
     marginTop: spacing.xs,
   },
   card: {
@@ -145,31 +272,28 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   cardHeader: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.sm,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   cardTitleWrap: {
     flex: 1,
     gap: 4,
   },
   eventTitle: {
-    color: colors.text,
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   eventMeta: {
-    color: colors.mutedText,
     fontSize: 13,
   },
   location: {
-    color: colors.mutedText,
     fontSize: 14,
   },
   cardFooter: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   removeButton: {
     borderColor: colors.danger,
@@ -180,25 +304,25 @@ const styles = StyleSheet.create({
   },
   removeButtonText: {
     color: colors.danger,
-    fontWeight: '800',
+    fontWeight: "800",
   },
   footerActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    flexDirection: "row",
     gap: spacing.xs,
   },
   checkInQuickButton: {
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
+    alignItems: "center",
+    backgroundColor: "#0F172A",
     borderRadius: 999,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
   checkInQuickText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 });

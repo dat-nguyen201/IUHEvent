@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Platform } from "react-native";
 
 import {
   cancelEventReminder,
@@ -7,7 +7,7 @@ import {
   isReminderScheduled,
   requestNotificationPermission,
   scheduleEventReminder,
-} from '@/services/notificationService';
+} from "@/services/notificationService";
 
 export function useEventReminder(
   eventId: string,
@@ -36,13 +36,21 @@ export function useEventReminder(
 
   const scheduleReminder = useCallback(
     async (minutesBefore: number = 15, isDemoNow: boolean = false) => {
+      if (eventId && startsAt && new Date(startsAt).getTime() <= Date.now()) {
+        Alert.alert(
+          "Sự kiện đã kết thúc",
+          "Sự kiện này đã kết thúc, bạn không thể đặt nhắc nhở nữa.",
+        );
+        return false;
+      }
+
       setLoading(true);
 
-      if (Platform.OS === 'web') {
+      if (Platform.OS === "web") {
         setLoading(false);
         Alert.alert(
-          'Thông báo Web',
-          'Tính năng thông báo thiết bị chỉ hỗ trợ trên ứng dụng Android/iOS thực tế hoặc máy ảo.',
+          "Thông báo Web",
+          "Tính năng thông báo thiết bị chỉ hỗ trợ trên ứng dụng Android/iOS thực tế hoặc máy ảo.",
         );
         return false;
       }
@@ -54,9 +62,9 @@ export function useEventReminder(
           setPermissionDenied(true);
           setLoading(false);
           Alert.alert(
-            'Quyền thông báo bị từ chối',
-            'Vui lòng cho phép quyền thông báo trong Cài đặt hệ thống để nhận lời nhắc trước sự kiện.',
-            [{ text: 'Đã hiểu' }],
+            "Quyền thông báo bị từ chối",
+            "Vui lòng cho phép quyền thông báo trong Cài đặt hệ thống để nhận lời nhắc trước sự kiện.",
+            [{ text: "Đã hiểu" }],
           );
           return false;
         }
@@ -77,10 +85,16 @@ export function useEventReminder(
 
       if (result.success) {
         setIsScheduled(true);
-        Alert.alert('Thành công', result.message ?? 'Đã lên lịch nhắc nhở sự kiện!');
+        Alert.alert(
+          "Thành công",
+          result.message ?? "Đã lên lịch nhắc nhở sự kiện!",
+        );
         return true;
       } else {
-        Alert.alert('Không thể đặt thông báo', result.message ?? 'Đã có lỗi xảy ra.');
+        Alert.alert(
+          "Không thể đặt thông báo",
+          result.message ?? "Đã có lỗi xảy ra.",
+        );
         return false;
       }
     },
@@ -92,7 +106,10 @@ export function useEventReminder(
     await cancelEventReminder(eventId);
     setIsScheduled(false);
     setLoading(false);
-    Alert.alert('Đã hủy nhắc nhở', 'Bạn sẽ không nhận được thông báo cho sự kiện này nữa.');
+    Alert.alert(
+      "Đã hủy nhắc nhở",
+      "Bạn sẽ không nhận được thông báo cho sự kiện này nữa.",
+    );
   }, [eventId]);
 
   return {

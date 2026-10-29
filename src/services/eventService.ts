@@ -1,17 +1,19 @@
-import { fetchAllEvents, getCachedEvents } from '@/services/eventsApi';
-import { getStoredValue, setStoredValue } from '@/services/authStorage';
-import type { EventCategory, EventPage, StudentEvent } from '@/types/events';
+import { fetchAllEvents, getCachedEvents } from "@/services/eventsApi";
+import { getStoredValue, setStoredValue } from "@/services/authStorage";
+import type { EventCategory, EventPage, StudentEvent } from "@/types/events";
+import { isFutureEvent } from "@/utils/date";
 
 type GetEventsParams = {
   page: number;
   pageSize: number;
   query?: string;
   category?: EventCategory;
+  upcomingOnly?: boolean;
   fail?: boolean;
 };
 
 const NETWORK_DELAY_MS = 350;
-const REGISTERED_EVENTS_KEY = 'iuh-event-registered-events';
+const REGISTERED_EVENTS_KEY = "iuh-event-registered-events";
 const registeredEventIds = new Set<string>();
 let registrationLoad: Promise<void> | null = null;
 
@@ -25,7 +27,10 @@ async function loadRegisteredEvents() {
         const eventIds: unknown = JSON.parse(storedValue);
         if (!Array.isArray(eventIds)) return;
         eventIds
-          .filter((eventId): eventId is string => typeof eventId === 'string' && Boolean(getEventByIdSync(eventId)))
+          .filter(
+            (eventId): eventId is string =>
+              typeof eventId === "string" && Boolean(getEventByIdSync(eventId)),
+          )
           .forEach((eventId) => registeredEventIds.add(eventId));
       } catch {
         await setStoredValue(REGISTERED_EVENTS_KEY, JSON.stringify([]));
@@ -40,7 +45,10 @@ async function loadRegisteredEvents() {
 }
 
 async function persistRegisteredEvents(nextEventIds: Set<string>) {
-  await setStoredValue(REGISTERED_EVENTS_KEY, JSON.stringify([...nextEventIds]));
+  await setStoredValue(
+    REGISTERED_EVENTS_KEY,
+    JSON.stringify([...nextEventIds]),
+  );
 }
 
 function wait(ms: number) {
@@ -52,13 +60,14 @@ function wait(ms: number) {
 export async function getEvents({
   page,
   pageSize,
-  query = '',
+  query = "",
   category,
+  upcomingOnly = false,
   fail = false,
 }: GetEventsParams): Promise<EventPage> {
   if (fail) {
     await wait(NETWORK_DELAY_MS);
-    throw new Error('Demo network error');
+    throw new Error("Demo network error");
   }
 
   const { events, source } = await fetchAllEvents();
@@ -70,8 +79,9 @@ export async function getEvents({
       event.title.toLowerCase().includes(normalizedQuery) ||
       event.location.toLowerCase().includes(normalizedQuery);
     const matchesCategory = !category || event.category === category;
+    const matchesUpcoming = !upcomingOnly || isFutureEvent(event.startsAt);
 
-    return matchesQuery && matchesCategory;
+    return matchesQuery && matchesCategory && matchesUpcoming;
   });
 
   const start = (page - 1) * pageSize;
@@ -86,7 +96,9 @@ export async function getEvents({
   };
 }
 
-export async function getEventById(id: string): Promise<StudentEvent | undefined> {
+export async function getEventById(
+  id: string,
+): Promise<StudentEvent | undefined> {
   const { events } = await fetchAllEvents();
   return events.find((event) => event.id === id);
 }
@@ -96,25 +108,30 @@ export function getEventByIdSync(id: string): StudentEvent | undefined {
 }
 
 export async function registerEvent(id: string) {
+  const event = getEventByIdSync(id);
+  if (!event) throw new Error("EVENT_NOT_FOUND");
+  if (new Date(event.startsAt).getTime() <= Date.now()) {
+    throw new Error("EVENT_EXPIRED");
+  }
+
   await wait(NETWORK_DELAY_MS);
-  if (!getEventByIdSync(id)) throw new Error('EVENT_NOT_FOUND');
   await loadRegisteredEvents();
   const nextEventIds = new Set(registeredEventIds);
   nextEventIds.add(id);
   await persistRegisteredEvents(nextEventIds);
   registeredEventIds.add(id);
-  return { eventId: id, status: 'registered' as const };
+  return { eventId: id, status: "registered" as const };
 }
 
 export async function cancelEventRegistration(id: string) {
   await wait(NETWORK_DELAY_MS);
-  if (!getEventByIdSync(id)) throw new Error('EVENT_NOT_FOUND');
+  if (!getEventByIdSync(id)) throw new Error("EVENT_NOT_FOUND");
   await loadRegisteredEvents();
   const nextEventIds = new Set(registeredEventIds);
   nextEventIds.delete(id);
   await persistRegisteredEvents(nextEventIds);
   registeredEventIds.delete(id);
-  return { eventId: id, status: 'cancelled' as const };
+  return { eventId: id, status: "cancelled" as const };
 }
 
 export async function isEventRegistered(id: string) {
