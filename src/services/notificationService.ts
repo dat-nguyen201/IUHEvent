@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { AndroidImportance, IosAuthorizationStatus } from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { getStoredValue, removeStoredValue, setStoredValue } from '@/services/authStorage';
@@ -19,13 +20,16 @@ if (Platform.OS !== 'web') {
 
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS === 'android') {
+    try {
     await Notifications.setNotificationChannelAsync('iuh-event-reminders', {
       name: 'Nhắc nhở sự kiện IUH',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#1F4E79',
-      sound: 'default',
     });
+    } catch (err) {
+      console.warn('Cannot setup notification channel in current environment:', err);
+    }
   }
 }
 
@@ -42,7 +46,7 @@ export async function checkNotificationPermission(): Promise<PermissionResult> {
   try {
     const settings = await Notifications.getPermissionsAsync();
     return {
-      granted: settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL,
+      granted: settings.granted || settings.ios?.status === IosAuthorizationStatus.PROVISIONAL,
       canAskAgain: settings.canAskAgain,
     };
   } catch (err) {
@@ -65,10 +69,10 @@ export async function requestNotificationPermission(): Promise<PermissionResult>
       },
     });
 
-    await setupNotificationChannels();
+    try { await setupNotificationChannels(); } catch (e) { console.warn(e); }
 
     return {
-      granted: settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL,
+      granted: settings.granted || settings.ios?.status === IosAuthorizationStatus.PROVISIONAL,
       canAskAgain: settings.canAskAgain,
     };
   } catch (err) {
@@ -145,7 +149,6 @@ export async function scheduleEventReminder({
         eventId,
         url: `studenteventapp://events/${eventId}`,
       },
-      sound: 'default',
     },
     trigger,
   });
