@@ -1,14 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
 import { getStoredValue, removeStoredValue, setStoredValue } from '@/services/authStorage';
+import type { AuthUser, RegisterInput } from '@/types/auth';
 
-export type DemoUser = {
-  id: string;
-  name: string;
-  studentId: string;
-  email: string;
-  major: string;
-};
+export type DemoUser = AuthUser;
 
 type StoredAccount = {
   user: DemoUser;
@@ -26,6 +21,8 @@ const adminUser: DemoUser = {
   id: 'admin',
   name: 'Quản trị viên',
   studentId: 'ADMIN',
+  role: 'admin',
+  status: 'active',
   email: 'admin@iuh.edu.vn',
   major: 'Quản trị hệ thống',
 };
@@ -41,7 +38,35 @@ async function getAccount(email: string): Promise<StoredAccount | null> {
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as StoredAccount;
+    const parsed = JSON.parse(value) as Partial<StoredAccount>;
+    const user = parsed.user;
+    if (
+      !user ||
+      typeof user.id !== 'string' ||
+      typeof user.name !== 'string' ||
+      typeof user.studentId !== 'string' ||
+      typeof user.email !== 'string' ||
+      typeof user.major !== 'string' ||
+      typeof parsed.salt !== 'string' ||
+      typeof parsed.passwordHash !== 'string'
+    ) {
+      await removeStoredValue(key);
+      return null;
+    }
+
+    return {
+      salt: parsed.salt,
+      passwordHash: parsed.passwordHash,
+      user: {
+        id: user.id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        major: user.major,
+        role: user.role === 'admin' ? 'admin' : 'student',
+        status: user.status === 'suspended' ? 'suspended' : 'active',
+      },
+    };
   } catch {
     await removeStoredValue(key);
     return null;
@@ -69,12 +94,7 @@ export async function hasCompletedGetStarted() {
   return (await getStoredValue(GET_STARTED_KEY)) === 'true';
 }
 
-export async function registerDemoAccount(input: {
-  name: string;
-  studentId: string;
-  email: string;
-  password: string;
-}) {
+export async function registerDemoAccount(input: RegisterInput) {
   const email = input.email.trim().toLowerCase();
   if (email === adminUser.email || await getAccount(email)) {
     throw new Error('EMAIL_EXISTS');
@@ -87,6 +107,8 @@ export async function registerDemoAccount(input: {
     studentId: input.studentId.trim(),
     email,
     major: 'Sinh viên IUH',
+    role: 'student',
+    status: 'active',
   };
   const account = { user, salt, passwordHash: await hashPassword(input.password, salt) };
 

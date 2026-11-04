@@ -1,5 +1,6 @@
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { appMode, appModeConfigError, type AppMode } from '@/constants/app-mode';
 import { useAppState } from '@/context/AppStateContext';
 import {
   completeGetStarted,
@@ -8,17 +9,26 @@ import {
   loginDemoAccount,
   logoutDemoAccount,
   registerDemoAccount,
-  type DemoUser,
 } from '@/services/authService';
+import { ApiError } from '@/services/apiClient';
+import {
+  getRemoteAuthSession,
+  loginRemoteAccount,
+  logoutRemoteAccount,
+  registerRemoteAccount,
+} from '@/services/remoteAuthService';
+import type { AuthUser, RegisterInput } from '@/types/auth';
 
-type RegisterInput = { name: string; studentId: string; email: string; password: string };
 type AuthContextValue = {
-  user: DemoUser | null;
+  user: AuthUser | null;
+  mode: AppMode;
   isReady: boolean;
+  startupError: string | null;
   hasSeenGetStarted: boolean;
   register: (input: RegisterInput) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  retryRestoreSession: () => Promise<void>;
   finishGetStarted: () => Promise<void>;
 };
 
@@ -26,43 +36,77 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { setUser } = useAppState();
-  const [user, setCurrentUser] = useState<DemoUser | null>(null);
+  const [user, setCurrentUser] = useState<AuthUser | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [startupError, setStartupError] = useState<string | null>(null);
   const [hasSeenGetStarted, setHasSeenGetStarted] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([getAuthSession(), hasCompletedGetStarted()]).then(([session, completed]) => {
-      if (!active) return;
+  const restoreSession = useCallback(async () => {
+    setIsReady(false);
+    setStartupError(null);
+
+    try {
+      if (appModeConfigError) {
+        throw new ApiError('INVALID_APP_MODE', 'EXPO_PUBLIC_APP_MODE chỉ nhận demo hoặc remote.');
+      }
+
+      const completed = await hasCompletedGetStarted().catch(() => false);
+      const session = appMode === 'demo'
+        ? await getAuthSession()
+        : await getRemoteAuthSession();
+
       setCurrentUser(session);
       setUser(session);
       setHasSeenGetStarted(completed);
+    } catch (error) {
+      setCurrentUser(null);
+      setUser(null);
+      setStartupError(error instanceof ApiError ? error.code : 'SESSION_RESTORE_FAILED');
+    } finally {
       setIsReady(true);
-    }).catch(() => {
-      if (active) setIsReady(true);
-    });
-    return () => {
-      active = false;
-    };
+    }
   }, [setUser]);
 
-  const acceptUser = useCallback((nextUser: DemoUser) => {
+  useEffect(() => {
+    void restoreSession();
+  }, [restoreSession]);
+
+  const assertModeConfigured = useCallback(() => {
+    if (appModeConfigError) {
+      throw new ApiError('INVALID_APP_MODE', 'EXPO_PUBLIC_APP_MODE chỉ nhận demo hoặc remote.');
+    }
+  }, []);
+
+  const acceptUser = useCallback((nextUser: AuthUser) => {
+    setStartupError(null);
     setCurrentUser(nextUser);
     setUser(nextUser);
   }, [setUser]);
 
   const register = useCallback(async (input: RegisterInput) => {
-    acceptUser(await registerDemoAccount(input));
-  }, [acceptUser]);
+    assertModeConfigured();
+    const nextUser = appMode === 'demo'
+      ? await registerDemoAccount(input)
+      : await registerRemoteAccount(input);
+    acceptUser(nextUser);
+  }, [acceptUser, assertModeConfigured]);
 
   const login = useCallback(async (email: string, password: string) => {
-    acceptUser(await loginDemoAccount(email, password));
-  }, [acceptUser]);
+    assertModeConfigured();
+    const nextUser = appMode === 'demo'
+      ? await loginDemoAccount(email, password)
+      : await loginRemoteAccount(email, password);
+    acceptUser(nextUser);
+  }, [acceptUser, assertModeConfigured]);
 
   const logout = useCallback(async () => {
-    await logoutDemoAccount();
-    setCurrentUser(null);
-    setUser(null);
+    try {
+      if (appMode === 'demo') await logoutDemoAccount();
+      else await logoutRemoteAccount();
+    } finally {
+      setCurrentUser(null);
+      setUser(null);
+    }
   }, [setUser]);
 
   const finishGetStarted = useCallback(async () => {
@@ -72,13 +116,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const value = useMemo(() => ({
     user,
+    mode: appMode,
     isReady,
+    startupError,
     hasSeenGetStarted,
     register,
     login,
     logout,
+    retryRestoreSession: restoreSession,
     finishGetStarted,
-  }), [user, isReady, hasSeenGetStarted, register, login, logout, finishGetStarted]);
+  }), [user, isReady, startupError, hasSeenGetStarted, register, login, logout, restoreSession, finishGetStarted]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

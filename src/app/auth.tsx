@@ -16,6 +16,7 @@ import {
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
 import { colors, spacing } from '@/constants/app-theme';
+import { ApiError } from '@/services/apiClient';
 import { getSafeEventRedirect } from '@/utils/event-links';
 import { useTheme } from '@tamagui/core';
 
@@ -23,7 +24,7 @@ type AuthMode = 'login' | 'register';
 
 export default function AuthScreen() {
   const { redirect: redirectParam } = useLocalSearchParams<{ redirect?: string | string[] }>();
-  const { login, register, hasSeenGetStarted } = useAuth();
+  const { login, register, hasSeenGetStarted, mode: appMode, startupError, retryRestoreSession } = useAuth();
   const theme = useTheme();
   const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
@@ -38,8 +39,8 @@ export default function AuthScreen() {
   const submit = async () => {
     setError('');
     const normalizedEmail = email.trim();
-    const isAdminLogin = mode === 'login' && normalizedEmail.toLowerCase() === 'admin';
-    if (!isAdminLogin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    const isDemoAdminLogin = appMode === 'demo' && mode === 'login' && normalizedEmail.toLowerCase() === 'admin';
+    if (!isDemoAdminLogin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setError('Vui lòng nhập địa chỉ email hợp lệ.');
       return;
     }
@@ -70,11 +71,8 @@ export default function AuthScreen() {
       } else router.replace(hasSeenGetStarted ? '/(tabs)' : '/get-started');
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : '';
-      setError(code === 'EMAIL_EXISTS'
-        ? 'Email này đã được đăng ký trên thiết bị.'
-        : mode === 'login'
-          ? 'Email hoặc mật khẩu chưa chính xác.'
-          : 'Chưa thể tạo tài khoản. Hãy thử lại.');
+      const serverMessage = cause instanceof ApiError ? cause.message : undefined;
+      setError(getAuthErrorMessage(code, appMode, mode, serverMessage));
     } finally {
       setBusy(false);
     }
@@ -100,6 +98,29 @@ export default function AuthScreen() {
           </View>
 
           <View style={[styles.form, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+            {startupError ? (
+              <View style={styles.startupError}>
+                <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger.val }]}>
+                  {getAuthErrorMessage(startupError, appMode, 'login')}
+                </Text>
+                {appMode === 'remote' && startupError !== 'INVALID_APP_MODE' ? (
+                  <Pressable
+                    disabled={busy}
+                    onPress={async () => {
+                      setBusy(true);
+                      try {
+                        await retryRestoreSession();
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    style={styles.retryButton}
+                  >
+                    <Text style={[styles.retryText, { color: theme.primary.val }]}>Thử kết nối lại</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             <View style={styles.segment}>
               <Pressable onPress={() => { setMode('login'); setError(''); }} style={[styles.segmentButton, mode === 'login' && { backgroundColor: theme.primary.val }]}>
                 <Text style={[styles.segmentText, { color: mode === 'login' ? '#FFFFFF' : theme.muted.val }]}>Đăng nhập</Text>
@@ -114,10 +135,10 @@ export default function AuthScreen() {
               <Field label="Mã sinh viên" value={studentId} onChangeText={setStudentId} placeholder="2000000000" autoCapitalize="characters" />
             </> : null}
             <Field
-              label={mode === 'login' ? 'Email hoặc tài khoản' : 'Email sinh viên'}
+              label={mode === 'login' && appMode === 'demo' ? 'Email hoặc tài khoản' : mode === 'login' ? 'Email' : 'Email sinh viên'}
               value={email}
               onChangeText={setEmail}
-              placeholder={mode === 'login' ? 'email@iuh.edu.vn hoặc admin' : 'email@iuh.edu.vn'}
+              placeholder={mode === 'login' && appMode === 'demo' ? 'email@iuh.edu.vn hoặc admin' : 'email@iuh.edu.vn'}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -133,13 +154,52 @@ export default function AuthScreen() {
             <Pressable disabled={busy} onPress={submit} style={[styles.primaryButton, busy && styles.disabledButton]}>
               {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}</Text>}
             </Pressable>
-            {mode === 'login' ? <Text style={[styles.adminHint, { color: theme.primary.val }]}>Tài khoản admin dùng thử: admin / 123456789</Text> : null}
-            <Text style={[styles.disclaimer, { color: theme.muted.val }]}>Tài khoản demo được lưu trên thiết bị này. Đây chưa phải dịch vụ xác thực chính thức.</Text>
+            {appMode === 'demo' && mode === 'login' ? <Text style={[styles.adminHint, { color: theme.primary.val }]}>Tài khoản admin dùng thử: admin / 123456789</Text> : null}
+            <Text style={[styles.disclaimer, { color: theme.muted.val }]}>
+              {appMode === 'demo'
+                ? 'Tài khoản demo được lưu trên thiết bị này. Đây chưa phải dịch vụ xác thực chính thức.'
+                : 'Tài khoản được xác thực qua máy chủ IUH Event.'}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );
+}
+
+function getAuthErrorMessage(
+  code: string,
+  appMode: 'demo' | 'remote',
+  authMode: AuthMode,
+  serverMessage?: string,
+) {
+  switch (code) {
+    case 'EMAIL_EXISTS':
+      return appMode === 'demo'
+        ? 'Email này đã được đăng ký trên thiết bị.'
+        : 'Email này đã được đăng ký.';
+    case 'STUDENT_ID_EXISTS':
+      return 'Mã sinh viên này đã được đăng ký.';
+    case 'INVALID_CREDENTIALS':
+    case 'UNAUTHORIZED':
+      return 'Email hoặc mật khẩu chưa chính xác.';
+    case 'ACCOUNT_SUSPENDED':
+      return 'Tài khoản đang bị khóa. Hãy liên hệ quản trị viên.';
+    case 'API_CONFIG_MISSING':
+      return 'Chưa cấu hình API. Hãy kiểm tra EXPO_PUBLIC_API_URL.';
+    case 'INVALID_APP_MODE':
+      return 'EXPO_PUBLIC_APP_MODE phải là demo hoặc remote.';
+    case 'REQUEST_TIMEOUT':
+    case 'NETWORK_ERROR':
+      return 'Không kết nối được máy chủ. Hãy kiểm tra mạng và thử lại.';
+    case 'FORBIDDEN':
+      return 'Tài khoản không có quyền thực hiện thao tác này.';
+    default:
+      if (serverMessage) return serverMessage;
+      return authMode === 'login'
+        ? 'Không thể đăng nhập. Hãy kiểm tra thông tin hoặc thử lại.'
+        : 'Chưa thể tạo tài khoản. Hãy thử lại.';
+  }
 }
 
 type FieldProps = ComponentProps<typeof TextInput> & { label: string };
@@ -184,6 +244,9 @@ const styles = StyleSheet.create({
   visibilityButton: { alignSelf: 'flex-end', paddingVertical: 2 },
   visibilityText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   error: { color: colors.danger, fontSize: 13, lineHeight: 19 },
+  startupError: { gap: spacing.xs },
+  retryButton: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
+  retryText: { fontSize: 13, fontWeight: '700' },
   primaryButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 13, justifyContent: 'center', minHeight: 52, marginTop: spacing.xs },
   disabledButton: { opacity: 0.65 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },

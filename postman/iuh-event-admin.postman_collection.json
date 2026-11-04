@@ -1,0 +1,54 @@
+{
+  "info": {
+    "_postman_id": "7de28a44-a360-4c6d-a219-05b28daaf702",
+    "name": "IUH Event API - Admin and Events",
+    "description": "Admin event and user management requests. Set the collection variables and log in as a seeded remote admin first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "adminEmail", "value": "" },
+    { "key": "adminPassword", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "eventId", "value": "" },
+    { "key": "userId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Admin login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Login succeeds', () => pm.response.to.have.status(200));", "const body = pm.response.json();", "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);", "if (body.user) pm.test('Account is admin', () => pm.expect(body.user.role).to.eql('admin'));" ] } }]
+    },
+    {
+      "name": "List events for admin",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/api/admin/events?page=1&pageSize=20" }
+    },
+    {
+      "name": "Create draft event",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"title\": \"Postman test event\",\n  \"description\": \"Temporary event created from the admin collection.\",\n  \"startsAt\": \"2027-01-15T09:00:00.000Z\",\n  \"location\": \"IUH\",\n  \"category\": \"Học thuật\",\n  \"organizer\": \"Student Club\",\n  \"capacity\": 100,\n  \"summarySource\": \"\",\n  \"status\": \"draft\"\n}" },
+        "url": "{{baseUrl}}/api/admin/events"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Event created', () => pm.response.to.have.status(201));", "const body = pm.response.json();", "if (body.data?.id) pm.collectionVariables.set('eventId', body.data.id);"] } }]
+    },
+    {
+      "name": "Publish event",
+      "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"published\"\n}" }, "url": "{{baseUrl}}/api/admin/events/{{eventId}}/status" }
+    },
+    {
+      "name": "List users",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/api/admin/users?page=1&pageSize=20" }
+    },
+    {
+      "name": "Read current admin profile",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/api/auth/me" }
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "info": {
+    "_postman_id": "b0bb4d2a-a8e9-45ee-a886-ea9e6a050002",
+    "name": "IUH Event - Remote Auth",
+    "description": "Remote auth smoke tests. Set baseUrl, email, password, name, and studentId before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "name", "value": "Test Student" },
+    { "key": "studentId", "value": "TEST-0001" },
+    { "key": "email", "value": "student@example.invalid" },
+    { "key": "password", "value": "ReplaceWithTestPassword123" },
+    { "key": "accessToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Register student",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{name}}\",\n  \"studentId\": \"{{studentId}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/register"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('register succeeds', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+              "if (pm.response.code === 200 || pm.response.code === 201) { const body = pm.response.json(); if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login student",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('login succeeds', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const body = pm.response.json(); pm.expect(body.accessToken).to.be.a('string'); pm.collectionVariables.set('accessToken', body.accessToken); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get current user",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('session is valid', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { const body = pm.response.json(); const user = body.user; pm.expect(user).to.include.keys('id', 'name', 'studentId', 'email', 'major', 'role', 'status'); pm.expect(['student', 'admin']).to.include(user.role); pm.expect(['active', 'suspended']).to.include(user.status); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Current user rejects missing token",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('missing token is rejected', function () { pm.response.to.have.status(401); });"]
+          }
+        }
+      ]
+    }
+  ]
+}

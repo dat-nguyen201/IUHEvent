@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Badge } from "@/components/Badge";
 import { Screen } from "@/components/Screen";
+import { appMode } from "@/constants/app-mode";
 import { colors, spacing } from "@/constants/app-theme";
 import { useAppState } from "@/context/AppStateContext";
 import { useAuth } from "@/context/AuthContext";
@@ -61,7 +62,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <Badge
-              label={user?.id === "admin" ? "Admin demo" : "Sinh viên"}
+              label={user?.role === "admin" ? (appMode === "demo" ? "Admin demo" : "Admin") : "Sinh viên"}
               tone="success"
             />
           </View>

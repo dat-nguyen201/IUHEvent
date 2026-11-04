@@ -12,23 +12,16 @@ import {
 
 import { getStoredValue, setStoredValue } from "@/services/authStorage";
 import { getEventByIdSync } from "@/services/eventService";
-
-type User = {
-  id: string;
-  name: string;
-  studentId: string;
-  email: string;
-  major: string;
-};
+import type { AuthUser } from "@/types/auth";
 
 type AppState = {
-  user: User | null;
+  user: AuthUser | null;
   savedEventIds: string[];
   checkedInEventIds: string[];
 };
 
 type AppAction =
-  | { type: "set-user"; user: User | null }
+  | { type: "set-user"; user: AuthUser | null }
   | {
       type: "hydrate-events";
       savedEventIds: string[];
@@ -42,7 +35,7 @@ type AppStateContextValue = AppState & {
   saveEvent: (eventId: string) => void;
   unsaveEvent: (eventId: string) => void;
   checkInEvent: (eventId: string) => void;
-  setUser: (user: User | null) => void;
+  setUser: (user: AuthUser | null) => void;
   isEventSaved: (eventId: string) => boolean;
 };
 
@@ -205,7 +198,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     dispatch({ type: "check-in-event", eventId });
   }, []);
 
-  const setUser = useCallback((user: User | null) => {
+  const setUser = useCallback((user: AuthUser | null) => {
     dispatch({ type: "set-user", user });
   }, []);
 
