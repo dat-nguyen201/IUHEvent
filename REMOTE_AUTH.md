@@ -14,13 +14,7 @@ Restart Expo after changing environment values. If mode is omitted, the app uses
 
 ## API contract
 
-- `POST /api/auth/register` accepts `{ name, studentId, email, password }`.
-- `POST /api/auth/login` accepts `{ email, password }`.
-- Both return `{ accessToken, user }`.
-- `GET /api/auth/me` accepts a bearer token and returns `{ user }`.
-- `user` contains `id`, `name`, `studentId`, `email`, `major`, `role`, and `status`.
-- `role` is `student` or `admin`; `status` is `active` or `suspended`.
-- Error responses may use `{ code, message }` or `{ error: { code, message } }`.
+[`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) is the single source of truth for the complete API, including authentication, profiles, events, administration, personal event data, and stable error responses. The auth endpoints used here are `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/auth/me`.
 
 The app stores the remote access token under a separate key from the local demo session. On HTTP 401 it clears the remote token. Network and timeout errors preserve the current screen and are shown for retry.
 

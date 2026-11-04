@@ -22,18 +22,10 @@ The admin seed script never prints or stores its password in source control. Re-
 - `npm run seed:admin`: create the first remote admin from environment variables.
 - `npm test`: run auth/security unit tests.
 
-## API
+## API contract
 
-Auth: `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`.
+The single source of truth for endpoints, request/response schemas, roles, statuses, validation, and error codes is [`docs/API_CONTRACT.md`](../docs/API_CONTRACT.md). Update it in the same pull request whenever the API contract changes.
 
-Events: `GET /api/events?page=1&pageSize=10&query=&category=&upcomingOnly=false`, `GET /api/events/:eventId`.
-
-Admin events: `GET/POST /api/admin/events`, `GET/PATCH /api/admin/events/:eventId`, `PATCH /api/admin/events/:eventId/status`.
-
-Admin users: `GET /api/admin/users`, `GET /api/admin/users/:userId`, `PATCH /api/admin/users/:userId/profile`, `PATCH /api/admin/users/:userId/status`.
-
-Current user: `GET/PATCH /api/me/profile`, `GET /api/me/saved-events`, `POST/DELETE /api/me/saved-events/:eventId`, `GET /api/me/registrations`, `POST/DELETE /api/me/registrations/:eventId`, `POST /api/me/registrations/:eventId/check-in`.
-
-All errors use `{ "code": "...", "message": "..." }`. Admin access is enforced by middleware from the current database user on every protected request; the client-supplied role is never trusted. Event deletion is archival and user deletion is suspension so registration history remains intact.
+Admin access is enforced by middleware from the current database user on every protected request; the client-supplied role is never trusted. Event deletion is archival and user deletion is suspension so registration history remains intact.
 
 Set the Expo app's `EXPO_PUBLIC_APP_MODE=remote` and `EXPO_PUBLIC_API_URL` to this server's reachable URL. For a physical phone, use the development computer's LAN IP, not `localhost`.
