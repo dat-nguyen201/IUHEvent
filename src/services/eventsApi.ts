@@ -106,6 +106,19 @@ export async function fetchAllEvents(options: { force?: boolean } = {}) {
   }
 }
 
+export function cacheStudentEvents(newEvents: StudentEvent[], source: EventDataSource = 'remote') {
+  const existing = cache?.events ?? studentEvents;
+  const map = new Map(existing.map((e) => [e.id, e]));
+  for (const event of newEvents) {
+    map.set(event.id, event);
+  }
+  cache = { events: Array.from(map.values()), source, at: Date.now() };
+}
+
+export function setCachedEvents(events: StudentEvent[], source: EventDataSource = 'remote') {
+  cache = { events, source, at: Date.now() };
+}
+
 export function getCachedEvents(): StudentEvent[] {
   return cache?.events ?? studentEvents;
 }

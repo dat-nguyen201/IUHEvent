@@ -22,7 +22,36 @@ export type EventDto = {
 export type EventsResponse = {
   data: EventDto[];
   total: number;
+  page?: number;
+  pageSize?: number;
+  hasMore?: boolean;
   source?: string;
+};
+
+export type EventDetailResponse = {
+  data: EventDto;
+};
+
+export type SavedEventItemDto = {
+  eventId: string;
+  savedAt: string;
+  event: EventDto;
+};
+
+export type SavedEventsResponse = {
+  data: SavedEventItemDto[];
+};
+
+export type RegistrationItemDto = {
+  eventId: string;
+  status: 'registered' | 'cancelled' | 'checked-in';
+  registeredAt: string;
+  checkedInAt?: string;
+  event: EventDto | null;
+};
+
+export type RegistrationsResponse = {
+  data: RegistrationItemDto[];
 };
 
 /** Nguồn dữ liệu thực tế đã dùng cho lần tải gần nhất. */

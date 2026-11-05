@@ -73,6 +73,10 @@ export async function loginRemoteAccount(emailInput: string, password: string) {
   return saveAuthResponse(response);
 }
 
+export async function getRemoteToken(): Promise<string | null> {
+  return getStoredValue(REMOTE_TOKEN_KEY);
+}
+
 export async function getRemoteAuthSession(): Promise<AuthUser | null> {
   const token = await getStoredValue(REMOTE_TOKEN_KEY);
   if (!token) return null;

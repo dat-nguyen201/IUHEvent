@@ -1,9 +1,10 @@
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Image,
   ImageBackground,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,12 +20,14 @@ import Animated, {
 
 import { Badge } from "@/components/Badge";
 import { Screen } from "@/components/Screen";
+import { StatusMessage } from "@/components/StatusMessage";
 import { colors, spacing } from "@/constants/app-theme";
 import { useAppState } from "@/context/AppStateContext";
 import { eventCategories } from "@/data/events";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 import type { StudentEvent } from "@/types/events";
 import { getEvents } from "@/services/eventService";
+import { ApiError } from "@/services/apiClient";
 import { useTheme } from "@tamagui/core";
 
 export default function HomeScreen() {
@@ -33,27 +36,41 @@ export default function HomeScreen() {
 
   const [upcomingEvents, setUpcomingEvents] = useState<StudentEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadHomeData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+    try {
+      const result = await getEvents({ page: 1, pageSize: 50, upcomingOnly: true });
+      const futureEvents = result.items
+        .filter((event) => isFutureEvent(event.startsAt))
+        .sort(
+          (a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        );
+      setUpcomingEvents(futureEvents);
+    } catch (e) {
+      console.error(e);
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Không thể kết nối máy chủ. Hãy kiểm tra kết nối mạng và thử lại.",
+      );
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function loadHomeData() {
-      setIsLoading(true);
-      try {
-        const result = await getEvents({ page: 1, pageSize: 1000 });
-        const futureEvents = result.items
-          .filter((event) => isFutureEvent(event.startsAt))
-          .sort(
-            (a, b) =>
-              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-          );
-        setUpcomingEvents(futureEvents);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadHomeData();
-  }, []);
+    void loadHomeData();
+  }, [loadHomeData]);
 
   const featured = upcomingEvents[0];
 
@@ -70,11 +87,32 @@ export default function HomeScreen() {
     );
   }
 
+  if (error && upcomingEvents.length === 0) {
+    return (
+      <Screen>
+        <StatusMessage
+          title="Không thể tải sự kiện"
+          message={error}
+          actionLabel="Thử lại"
+          onAction={() => loadHomeData()}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadHomeData(true)}
+            colors={[theme.primary.val]}
+            tintColor={theme.primary.val}
+          />
+        }
       >
         <View style={styles.header}>
           <View style={styles.greeting}>

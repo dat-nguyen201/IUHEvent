@@ -1,9 +1,17 @@
-import { fetchAllEvents, getCachedEvents } from "@/services/eventsApi";
-import { getStoredValue, setStoredValue } from "@/services/authStorage";
-import type { EventCategory, EventPage, StudentEvent } from "@/types/events";
-import { isFutureEvent } from "@/utils/date";
+import { appMode } from '@/constants/app-mode';
+import { fetchAllEvents, getCachedEvents } from '@/services/eventsApi';
+import { getStoredValue, setStoredValue } from '@/services/authStorage';
+import {
+  cancelRemoteRegistration,
+  checkInRemoteEvent,
+  fetchRemoteEventById,
+  fetchRemoteEvents,
+  registerRemoteEvent,
+} from '@/services/remoteStudentService';
+import type { EventCategory, EventPage, StudentEvent } from '@/types/events';
+import { isFutureEvent } from '@/utils/date';
 
-type GetEventsParams = {
+export type GetEventsParams = {
   page: number;
   pageSize: number;
   query?: string;
@@ -13,7 +21,7 @@ type GetEventsParams = {
 };
 
 const NETWORK_DELAY_MS = 350;
-const REGISTERED_EVENTS_KEY = "iuh-event-registered-events";
+const REGISTERED_EVENTS_KEY = 'iuh-event-registered-events';
 const registeredEventIds = new Set<string>();
 let registrationLoad: Promise<void> | null = null;
 
@@ -29,7 +37,7 @@ async function loadRegisteredEvents() {
         eventIds
           .filter(
             (eventId): eventId is string =>
-              typeof eventId === "string" && Boolean(getEventByIdSync(eventId)),
+              typeof eventId === 'string' && Boolean(getEventByIdSync(eventId)),
           )
           .forEach((eventId) => registeredEventIds.add(eventId));
       } catch {
@@ -60,14 +68,18 @@ function wait(ms: number) {
 export async function getEvents({
   page,
   pageSize,
-  query = "",
+  query = '',
   category,
   upcomingOnly = false,
   fail = false,
 }: GetEventsParams): Promise<EventPage> {
   if (fail) {
     await wait(NETWORK_DELAY_MS);
-    throw new Error("Demo network error");
+    throw new Error('Demo network error');
+  }
+
+  if (appMode === 'remote') {
+    return fetchRemoteEvents({ page, pageSize, query, category, upcomingOnly });
   }
 
   const { events, source } = await fetchAllEvents();
@@ -99,6 +111,10 @@ export async function getEvents({
 export async function getEventById(
   id: string,
 ): Promise<StudentEvent | undefined> {
+  if (appMode === 'remote') {
+    return fetchRemoteEventById(id);
+  }
+
   const { events } = await fetchAllEvents();
   return events.find((event) => event.id === id);
 }
@@ -107,11 +123,17 @@ export function getEventByIdSync(id: string): StudentEvent | undefined {
   return getCachedEvents().find((event) => event.id === id);
 }
 
-export async function registerEvent(id: string) {
+export async function registerEvent(id: string): Promise<{ eventId: string; status: 'registered' }> {
+  if (appMode === 'remote') {
+    const result = await registerRemoteEvent(id);
+    registeredEventIds.add(id);
+    return result;
+  }
+
   const event = getEventByIdSync(id);
-  if (!event) throw new Error("EVENT_NOT_FOUND");
+  if (!event) throw new Error('EVENT_NOT_FOUND');
   if (new Date(event.startsAt).getTime() <= Date.now()) {
-    throw new Error("EVENT_EXPIRED");
+    throw new Error('EVENT_EXPIRED');
   }
 
   await wait(NETWORK_DELAY_MS);
@@ -120,26 +142,37 @@ export async function registerEvent(id: string) {
   nextEventIds.add(id);
   await persistRegisteredEvents(nextEventIds);
   registeredEventIds.add(id);
-  return { eventId: id, status: "registered" as const };
+  return { eventId: id, status: 'registered' };
 }
 
-export async function cancelEventRegistration(id: string) {
+export async function cancelEventRegistration(id: string): Promise<{ eventId: string; status: 'cancelled' }> {
+  if (appMode === 'remote') {
+    const result = await cancelRemoteRegistration(id);
+    registeredEventIds.delete(id);
+    return result;
+  }
+
   await wait(NETWORK_DELAY_MS);
-  if (!getEventByIdSync(id)) throw new Error("EVENT_NOT_FOUND");
+  if (!getEventByIdSync(id)) throw new Error('EVENT_NOT_FOUND');
   await loadRegisteredEvents();
   const nextEventIds = new Set(registeredEventIds);
   nextEventIds.delete(id);
   await persistRegisteredEvents(nextEventIds);
   registeredEventIds.delete(id);
-  return { eventId: id, status: "cancelled" as const };
+  return { eventId: id, status: 'cancelled' };
 }
 
-export async function isEventRegistered(id: string) {
+export async function isEventRegistered(id: string): Promise<boolean> {
   await loadRegisteredEvents();
   return registeredEventIds.has(id);
 }
 
 export async function checkInEvent(id: string, qrValue: string) {
+  if (appMode === 'remote') {
+    await checkInRemoteEvent(id, qrValue);
+    return { eventId: id, success: true };
+  }
+
   await wait(NETWORK_DELAY_MS);
   return {
     eventId: id,
