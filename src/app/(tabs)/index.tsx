@@ -1,5 +1,5 @@
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -26,6 +26,7 @@ import { formatEventDate, isFutureEvent } from "@/utils/date";
 import type { StudentEvent } from "@/types/events";
 import { getEvents } from "@/services/eventService";
 import { useTheme } from "@tamagui/core";
+import { getAvatarUri } from "@/services/avatarStorage";
 
 export default function HomeScreen() {
   const { user, savedEventIds, checkedInEventIds } = useAppState();
@@ -33,6 +34,19 @@ export default function HomeScreen() {
 
   const [upcomingEvents, setUpcomingEvents] = useState<StudentEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) {
+        setAvatarUri(null);
+        return undefined;
+      }
+
+      void getAvatarUri(user.id).then(setAvatarUri);
+      return undefined;
+    }, [user]),
+  );
 
   useEffect(() => {
     async function loadHomeData() {
@@ -92,7 +106,11 @@ export default function HomeScreen() {
             onPress={() => router.push("/(tabs)/profile")}
             style={styles.avatar}
           >
-            <Text style={styles.avatarText}>{user?.name.charAt(0) ?? "S"}</Text>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{user?.name.charAt(0) ?? "S"}</Text>
+            )}
           </Pressable>
         </View>
 
@@ -432,6 +450,7 @@ const styles = StyleSheet.create({
     width: 46,
   },
   avatarText: { color: "#9A4D19", fontSize: 19, fontWeight: "900" },
+  avatarImage: { borderRadius: 22, height: 44, width: 44 },
   searchBox: {
     alignItems: "center",
     backgroundColor: colors.surface,

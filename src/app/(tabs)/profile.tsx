@@ -1,5 +1,7 @@
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useState } from "react";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Badge } from "@/components/Badge";
 import { Screen } from "@/components/Screen";
@@ -9,12 +11,47 @@ import { useAppState } from "@/context/AppStateContext";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme, type ThemePreference } from "@/context/ThemeContext";
 import { useTheme } from "@tamagui/core";
+import { getAvatarUri, setAvatarUri } from "@/services/avatarStorage";
 
 export default function ProfileScreen() {
   const { user, savedEventIds, checkedInEventIds } = useAppState();
   const { logout } = useAuth();
   const theme = useTheme();
   const { preference, setPreference } = useAppTheme();
+  const [avatarUri, setAvatarUriState] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setAvatarUriState(null);
+      return;
+    }
+    void getAvatarUri(user.id).then(setAvatarUriState);
+  }, [user?.id]);
+
+  const chooseAvatar = async () => {
+    if (!user?.id) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Không có quyền truy cập ảnh",
+        "Bạn có thể cấp quyền trong phần Cài đặt của thiết bị để chọn ảnh đại diện.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const uri = result.assets[0]?.uri;
+    if (!uri) return;
+    await setAvatarUri(user.id, uri);
+    setAvatarUriState(uri);
+  };
 
   const themeOptions: { value: ThemePreference; label: string }[] = [
     { value: "system", label: "Theo thiết bị" },
@@ -48,11 +85,21 @@ export default function ProfileScreen() {
           ]}
         >
           <View style={styles.identityRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name.charAt(0) ?? "S"}
-              </Text>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Đổi ảnh đại diện"
+              onPress={() => void chooseAvatar()}
+              style={styles.avatar}
+            >
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{user?.name.charAt(0) ?? "S"}</Text>
+              )}
+              <View style={styles.avatarEditBadge}>
+                <Text style={styles.avatarEditText}>+</Text>
+              </View>
+            </Pressable>
             <View style={styles.identityCopy}>
               <Text style={[styles.name, { color: theme.color.val }]}>
                 {user?.name ?? "Sinh viên IUH"}
@@ -82,6 +129,16 @@ export default function ProfileScreen() {
             Trường Đại học Công nghiệp TP.HCM
           </Text>
         </View>
+
+        {appMode === "remote" && user?.role === "admin" && user.status === "active" ? (
+          <Pressable
+            onPress={() => router.push({ pathname: "/admin-users" } as never)}
+            style={[styles.adminButton, { backgroundColor: theme.primary.val }]}
+          >
+            <Text style={styles.adminButtonText}>Quản lý sinh viên</Text>
+            <Text style={styles.adminButtonHint}>Xem hồ sơ và trạng thái tài khoản</Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
@@ -215,6 +272,21 @@ const styles = StyleSheet.create({
     width: 52,
   },
   avatarText: { color: "#9A4D19", fontSize: 22, fontWeight: "900" },
+  avatarImage: { borderRadius: 26, height: 52, width: 52 },
+  avatarEditBadge: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 2,
+    bottom: -2,
+    height: 20,
+    justifyContent: "center",
+    position: "absolute",
+    right: -2,
+    width: 20,
+  },
+  avatarEditText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900", lineHeight: 17 },
   name: { color: colors.text, fontSize: 16, fontWeight: "900" },
   studentId: { color: colors.mutedText, fontSize: 12 },
   divider: {
@@ -272,4 +344,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: "800" },
+  adminButton: { borderRadius: 16, gap: 4, padding: spacing.md },
+  adminButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  adminButtonHint: { color: "rgba(255,255,255,0.82)", fontSize: 12 },
 });

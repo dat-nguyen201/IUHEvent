@@ -101,7 +101,7 @@ npm run dev
 Giữ terminal đó mở. Kiểm tra `http://localhost:3000/health`; kết quả đúng là:
 
 ```json
-{"ok":true,"database":"connected"}
+{ "ok": true, "database": "connected" }
 ```
 
 ## 5. Chạy app Expo ở demo mode

@@ -51,6 +51,7 @@ function ThemedApp() {
                 <Stack.Screen name="get-started" />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="events/[id]" />
+                <Stack.Screen name="admin-users" />
                 <Stack.Screen
                   name="check-in"
                   options={{ animation: "slide_from_bottom" }}
@@ -79,7 +80,7 @@ function RouteGuard() {
     const isAuthRoute = route === "auth";
     const isOnboardingRoute = route === "get-started";
     const isProtectedRoute =
-      route === "(tabs)" || route === "events" || route === "check-in";
+      route === "(tabs)" || route === "events" || route === "check-in" || route === "admin-users";
 
     const pendingEventPath =
       route === "events" && segments[1]

@@ -97,3 +97,7 @@ export async function getRemoteAuthSession(): Promise<AuthUser | null> {
 export async function logoutRemoteAccount() {
   await removeStoredValue(REMOTE_TOKEN_KEY);
 }
+
+export function getRemoteAccessToken() {
+  return getStoredValue(REMOTE_TOKEN_KEY);
+}

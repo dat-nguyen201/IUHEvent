@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "seed:events": "tsx src/scripts/seed-events.ts",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "test": "tsx test/security.test.ts"

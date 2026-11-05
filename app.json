@@ -35,6 +35,13 @@
       ],
       "expo-secure-store",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép IUH Event sử dụng ảnh để làm ảnh đại diện.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Cho phép IUH Event sử dụng máy ảnh để quét mã QR check-in sự kiện.",
