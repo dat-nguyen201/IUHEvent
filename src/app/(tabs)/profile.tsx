@@ -62,7 +62,13 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <Badge
-              label={user?.role === "admin" ? (appMode === "demo" ? "Admin demo" : "Admin") : "Sinh viên"}
+              label={
+                user?.role === "admin"
+                  ? appMode === "demo"
+                    ? "Admin demo"
+                    : "Admin"
+                  : "Sinh viên"
+              }
               tone="success"
             />
           </View>
@@ -82,6 +88,21 @@ export default function ProfileScreen() {
             Trường Đại học Công nghiệp TP.HCM
           </Text>
         </View>
+
+        {appMode === "remote" &&
+        user?.role === "admin" &&
+        user.status === "active" ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/admin/events")}
+            style={[styles.adminAccess, { backgroundColor: theme.primary.val }]}
+          >
+            <Text style={styles.adminAccessTitle}>Quản trị sự kiện IUH</Text>
+            <Text style={styles.adminAccessCaption}>
+              Quản lý sự kiện và tài khoản sinh viên →
+            </Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
@@ -262,6 +283,9 @@ const styles = StyleSheet.create({
   metricDivider: { backgroundColor: colors.border, height: 34, width: 1 },
   metricValue: { color: colors.text, fontSize: 21, fontWeight: "900" },
   metricLabel: { color: colors.mutedText, fontSize: 12 },
+  adminAccess: { borderRadius: 14, padding: 18, gap: 6 },
+  adminAccessTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  adminAccessCaption: { color: "#FFFFFF", fontSize: 12 },
   logoutButton: {
     alignItems: "center",
     borderColor: colors.danger,

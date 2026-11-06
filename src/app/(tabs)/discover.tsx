@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -36,6 +36,8 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { colors, spacing } from "@/constants/app-theme";
 import { eventCategories } from "@/data/events";
 import { getEvents } from "@/services/eventService";
+import { appMode } from "@/constants/app-mode";
+import { invalidateEventsCache } from "@/services/eventsApi";
 import type { EventCategory, StudentEvent } from "@/types/events";
 
 const PAGE_SIZE = 5;
@@ -262,8 +264,17 @@ export default function DiscoverScreen() {
   );
 
   useEffect(() => {
-    void loadFirstPage();
+    if (appMode === "demo") void loadFirstPage();
   }, [loadFirstPage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (appMode === "remote") {
+        invalidateEventsCache();
+        void loadFirstPage();
+      }
+    }, [loadFirstPage]),
+  );
 
   const loadMore = useCallback(async () => {
     if (

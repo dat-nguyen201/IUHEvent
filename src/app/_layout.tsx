@@ -50,6 +50,7 @@ function ThemedApp() {
                 <Stack.Screen name="auth" />
                 <Stack.Screen name="get-started" />
                 <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="admin" />
                 <Stack.Screen name="events/[id]" />
                 <Stack.Screen
                   name="check-in"
@@ -67,7 +68,7 @@ function ThemedApp() {
 function RouteGuard() {
   const segments = useSegments() as readonly string[];
   const { redirect } = useLocalSearchParams<{ redirect?: string | string[] }>();
-  const { user, isReady, hasSeenGetStarted } = useAuth();
+  const { user, mode, isReady, hasSeenGetStarted } = useAuth();
   const route = segments[0];
   const pendingRedirect = useMemo(
     () => getSafeEventRedirect(redirect),
@@ -79,7 +80,10 @@ function RouteGuard() {
     const isAuthRoute = route === "auth";
     const isOnboardingRoute = route === "get-started";
     const isProtectedRoute =
-      route === "(tabs)" || route === "events" || route === "check-in";
+      route === "(tabs)" ||
+      route === "events" ||
+      route === "check-in" ||
+      route === "admin";
 
     const pendingEventPath =
       route === "events" && segments[1]
@@ -92,6 +96,12 @@ function RouteGuard() {
       router.replace(
         pendingParams ? { pathname: "/auth", params: pendingParams } : "/auth",
       );
+    } else if (
+      user &&
+      route === "admin" &&
+      (mode !== "remote" || user.role !== "admin" || user.status !== "active")
+    ) {
+      router.replace("/(tabs)");
     } else if (user && isProtectedRoute && !hasSeenGetStarted) {
       router.replace(
         pendingParams
@@ -105,6 +115,7 @@ function RouteGuard() {
   }, [
     hasSeenGetStarted,
     isReady,
+    mode,
     pendingRedirect,
     redirect,
     route,
