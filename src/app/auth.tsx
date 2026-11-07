@@ -183,6 +183,8 @@ function getAuthErrorMessage(
     case 'INVALID_CREDENTIALS':
     case 'UNAUTHORIZED':
       return 'Email hoặc mật khẩu chưa chính xác.';
+    case 'SESSION_EXPIRED':
+      return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
     case 'ACCOUNT_SUSPENDED':
       return 'Tài khoản đang bị khóa. Hãy liên hệ quản trị viên.';
     case 'API_CONFIG_MISSING':

@@ -14,7 +14,7 @@ export type AdminEventFormValues = {
   date: string;
   time: string;
   location: string;
-  category: EventCategory;
+  category: EventCategory | "";
   organizer: string;
   capacity: string;
   summarySource: string;
@@ -39,12 +39,12 @@ export function getInitialEventValues(
   return {
     title: event?.title ?? "",
     description: event?.description ?? "",
-    date: `${valid.getFullYear()}-${pad(valid.getMonth() + 1)}-${pad(valid.getDate())}`,
-    time: `${pad(valid.getHours())}:${pad(valid.getMinutes())}`,
+    date: event ? `${valid.getFullYear()}-${pad(valid.getMonth() + 1)}-${pad(valid.getDate())}` : "",
+    time: event ? `${pad(valid.getHours())}:${pad(valid.getMinutes())}` : "",
     location: event?.location ?? "",
-    category: event?.category ?? "Học thuật",
+    category: event?.category ?? "",
     organizer: event?.organizer ?? "",
-    capacity: event ? String(event.capacity) : "100",
+    capacity: event ? String(event.capacity) : "",
     summarySource: event?.summarySource ?? "",
     imageKey: event?.imageKey ?? "",
     imageUrl: event?.imageUrl ?? "",
@@ -87,22 +87,31 @@ export function validateAdminEventForm(values: AdminEventFormValues): {
     organizer = values.organizer.trim();
   const capacityText = values.capacity.trim();
   const capacity = Number(capacityText);
+  const category = ADMIN_CATEGORIES.find((item) => item === values.category);
   const date = parseLocalTime(values.date, values.time);
-  if (title.length < 3 || title.length > 160)
+  if (!title) errors.title = "Vui lòng nhập tên sự kiện.";
+  else if (title.length < 3 || title.length > 160)
     errors.title = "Tiêu đề phải có 3–160 ký tự.";
-  if (description.length < 1 || description.length > 8000)
-    errors.description = "Mô tả phải có 1–8000 ký tự.";
-  if (!date) {
-    errors.date = "Ngày không hợp lệ (YYYY-MM-DD).";
-    errors.time = "Giờ không hợp lệ (HH:mm).";
+  if (!description) errors.description = "Vui lòng nhập mô tả sự kiện.";
+  else if (description.length > 8000)
+    errors.description = "Mô tả tối đa 8000 ký tự.";
+  if (!values.date.trim()) errors.date = "Vui lòng chọn ngày bắt đầu.";
+  if (!values.time.trim()) errors.time = "Vui lòng chọn giờ bắt đầu.";
+  if (values.date.trim() && values.time.trim() && !date) {
+    errors.date = "Ngày hoặc giờ bắt đầu không hợp lệ.";
+    errors.time = "Ngày hoặc giờ bắt đầu không hợp lệ.";
   }
-  if (location.length < 2 || location.length > 240)
+  if (!location) errors.location = "Vui lòng nhập địa điểm.";
+  else if (location.length < 2 || location.length > 240)
     errors.location = "Địa điểm phải có 2–240 ký tự.";
-  if (organizer.length < 2 || organizer.length > 160)
+  if (!organizer) errors.organizer = "Vui lòng nhập đơn vị tổ chức.";
+  else if (organizer.length < 2 || organizer.length > 160)
     errors.organizer = "Đơn vị tổ chức phải có 2–160 ký tự.";
-  if (!ADMIN_CATEGORIES.includes(values.category))
+  if (!category)
     errors.category = "Vui lòng chọn danh mục hợp lệ.";
-  if (
+  if (!capacityText) {
+    errors.capacity = "Vui lòng nhập sức chứa.";
+  } else if (
     !/^\d+$/.test(capacityText) ||
     !Number.isInteger(capacity) ||
     capacity < 1 ||
@@ -127,7 +136,7 @@ export function validateAdminEventForm(values: AdminEventFormValues): {
       errors.imageUrl = "URL ảnh phải là http(s) hợp lệ, tối đa 2048 ký tự.";
     }
   }
-  if (Object.keys(errors).length || !date) return { errors };
+  if (Object.keys(errors).length || !date || !category) return { errors };
   return {
     errors,
     input: {
@@ -135,7 +144,7 @@ export function validateAdminEventForm(values: AdminEventFormValues): {
       description,
       startsAt: date.toISOString(),
       location,
-      category: values.category,
+      category,
       organizer,
       capacity,
       summarySource: values.summarySource.trim(),

@@ -149,23 +149,12 @@ Thiết bị phải truy cập được máy API. Nếu thành viên ở mạng 
 
 ## 8. Phạm vi hiện tại và kiểm tra
 
-- Remote mode hiện đã hỗ trợ xác thực qua backend.
-- Backend có API quản lý users, events, đăng ký, saved events và check-in; các endpoint quản trị có thể thử qua Postman.
-- Màn hình quản trị trong app chưa được làm.
-- Danh sách sự kiện của app hiện vẫn lấy nguồn mock/API sự kiện hiện có và fallback demo; chưa được nối đầy đủ với MongoDB events API. Đăng ký/check-in trong app cũng chưa đồng bộ backend.
-- Kiểm tra app:
-
-```powershell
-npx tsc --noEmit
-npx expo lint
-```
-
-- Kiểm tra backend (tại `server`):
-
-```powershell
-npm run build
-npm test
-```
+- Demo mode và remote auth đã được tích hợp. Remote auth lưu phiên riêng; khi API từ chối token (`401`) hoặc báo tài khoản bị khóa (`403 ACCOUNT_SUSPENDED`), app xóa phiên và đưa người dùng về đăng nhập.
+- Backend Express/MongoDB có API cho auth, hồ sơ, sự kiện công khai, quản trị sự kiện/người dùng, sự kiện đã lưu, đăng ký/hủy đăng ký và check-in. Contract chuẩn nằm ở `docs/API_CONTRACT.md`.
+- Giao diện admin trong app gồm quản lý sự kiện (tạo, sửa, đăng, chuyển nháp, lưu trữ) và quản lý người dùng (tìm, lọc, phân trang, xem/sửa hồ sơ, khóa/mở tài khoản). Admin UI chỉ dùng ở remote mode với tài khoản admin.
+- Luồng sinh viên remote đã nối danh sách/chi tiết sự kiện, tìm kiếm/lọc/phân trang, lịch cá nhân, saved events, đăng ký/hủy đăng ký và check-in. Demo mode tiếp tục dùng dữ liệu demo; lỗi remote không tự chuyển sang dữ liệu demo.
+- `scripts/verify-student-flow.js` là smoke check API sinh viên. Chỉ chạy khi backend local đã kết nối database có dữ liệu; script tạo user, lưu/hủy sự kiện, đăng ký và check-in nên không chạy trên dữ liệu production.
+- Các bước trên mô tả phạm vi đã có trong code; mỗi thành viên vẫn cần chạy app và backend theo cấu hình riêng, rồi kiểm tra luồng trên thiết bị/môi trường của mình.
 
 ## 9. Lỗi thường gặp
 

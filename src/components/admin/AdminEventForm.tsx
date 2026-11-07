@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useTheme } from '@tamagui/core';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
 import { AdminButton, AdminNotice, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminWidgets';
 import { Screen } from '@/components/Screen';
@@ -26,6 +27,8 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
+  const [pickerDraft, setPickerDraft] = useState(() => new Date());
   const isEditing = Boolean(eventId);
 
   const loadEvent = useCallback(async () => {
@@ -47,6 +50,31 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
     setErrors(current => ({ ...current, [key]: undefined }));
     setSaveError('');
   }, []);
+
+  const openPicker = (mode: 'date' | 'time') => {
+    const initial = makePickerDate(values);
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: initial,
+        mode,
+        display: mode === 'date' ? 'calendar' : 'clock',
+        is24Hour: true,
+        onValueChange: (_event, selectedDate) => {
+          setField(mode, mode === 'date' ? formatDate(selectedDate) : formatTime(selectedDate));
+        },
+      });
+      return;
+    }
+
+    setPickerDraft(initial);
+    setPickerMode(mode);
+  };
+
+  const confirmPicker = () => {
+    if (!pickerMode) return;
+    setField(pickerMode, pickerMode === 'date' ? formatDate(pickerDraft) : formatTime(pickerDraft));
+    setPickerMode(null);
+  };
 
   const save = async () => {
     if (busy) return;
@@ -99,8 +127,8 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
               </View>
               {errors.category ? <Text style={[styles.error, { color: theme.danger.val }]}>{errors.category}</Text> : null}
               <View style={styles.twoColumns}>
-                <View style={styles.column}><EventInput label="Ngày bắt đầu *" value={values.date} error={errors.date} disabled={busy} placeholder="YYYY-MM-DD" onChange={text => setField('date', text)} /></View>
-                <View style={styles.column}><EventInput label="Giờ bắt đầu *" value={values.time} error={errors.time} disabled={busy} placeholder="HH:mm" onChange={text => setField('time', text)} /></View>
+                <View style={styles.column}><DateTimeField label="Ngày bắt đầu *" mode="date" value={values.date} error={errors.date} disabled={busy} onChange={value => setField('date', value)} onPress={() => openPicker('date')} /></View>
+                <View style={styles.column}><DateTimeField label="Giờ bắt đầu *" mode="time" value={values.time} error={errors.time} disabled={busy} onChange={value => setField('time', value)} onPress={() => openPicker('time')} /></View>
               </View>
               <Text style={[styles.hint, { color: theme.muted.val }]}>Ngày và giờ theo múi giờ của thiết bị; API lưu UTC (ISO 8601).</Text>
               <EventInput label="Sức chứa *" value={values.capacity} disabled={busy} error={errors.capacity} keyboardType="number-pad" placeholder="100" onChange={text => setField('capacity', text)} />
@@ -116,7 +144,101 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      {Platform.OS === 'ios' && pickerMode ? (
+        <Modal transparent animationType="fade" visible onRequestClose={() => setPickerMode(null)}>
+          <View style={styles.pickerBackdrop}>
+            <View style={[styles.pickerCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+              <Text style={[styles.pickerTitle, { color: theme.color.val }]}>{pickerMode === 'date' ? 'Chọn ngày bắt đầu' : 'Chọn giờ bắt đầu'}</Text>
+              <DateTimePicker
+                value={pickerDraft}
+                mode={pickerMode}
+                display={pickerMode === 'date' ? 'inline' : 'spinner'}
+                is24Hour
+                onValueChange={(_event, date) => setPickerDraft(date)}
+                style={styles.iosPicker}
+              />
+              <View style={styles.pickerActions}>
+                <Pressable accessibilityRole="button" onPress={() => setPickerMode(null)} style={[styles.pickerAction, { borderColor: theme.border.val }]}>
+                  <Text style={{ color: theme.color.val, fontWeight: '700' }}>Hủy</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={confirmPicker} style={[styles.pickerAction, { backgroundColor: theme.primary.val, borderColor: theme.primary.val }]}>
+                  <Text style={styles.pickerConfirmText}>Chọn</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </Screen>
+  );
+}
+
+function makePickerDate(values: AdminEventFormValues) {
+  const [year, month, day] = values.date.split('-').map(Number);
+  const [hour, minute] = values.time.split(':').map(Number);
+  const date = new Date(year, month - 1, day, hour, minute);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function formatDate(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function formatTime(date: Date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function DateTimeField({ label, mode, value, error, disabled, onChange, onPress }: {
+  label: string;
+  mode: 'date' | 'time';
+  value: string;
+  error?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const displayValue = mode === 'date' ? value.split('-').reverse().join('/') : value;
+  const borderColor = error ? theme.danger.val : theme.border.val;
+
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: theme.color.val }]}>{label}</Text>
+      {Platform.OS === 'web' ? (
+        createElement('input', {
+          type: mode,
+          value,
+          disabled,
+          'aria-label': label,
+          onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.currentTarget.value),
+          style: {
+            boxSizing: 'border-box',
+            width: '100%',
+            minHeight: 46,
+            borderRadius: 10,
+            border: `1px solid ${borderColor}`,
+            padding: '10px 12px',
+            color: theme.color.val,
+            backgroundColor: theme.background.val,
+            fontSize: 14,
+          },
+        })
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label}: ${displayValue}`}
+          accessibilityState={{ disabled: Boolean(disabled) }}
+          disabled={disabled}
+          onPress={onPress}
+          style={[styles.pickerInput, { backgroundColor: theme.background.val, borderColor }]}
+        >
+          <Text style={[styles.pickerValue, { color: theme.color.val }]}>{displayValue}</Text>
+          <Ionicons name={mode === 'date' ? 'calendar-outline' : 'time-outline'} size={19} color={theme.primary.val} />
+        </Pressable>
+      )}
+      {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
+    </View>
   );
 }
 
@@ -157,6 +279,15 @@ const styles = StyleSheet.create({
   currentStatus: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   field: { gap: 6 }, label: { fontSize: 13, fontWeight: '800' },
   input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 11, minHeight: 46, fontSize: 14 },
+  pickerInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  pickerValue: { fontSize: 14, flex: 1 },
+  pickerBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: 20 },
+  pickerCard: { width: '100%', maxWidth: 420, borderWidth: 1, borderRadius: 20, padding: 16, gap: 12 },
+  pickerTitle: { fontSize: 17, fontWeight: '900' },
+  iosPicker: { alignSelf: 'center' },
+  pickerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  pickerAction: { minWidth: 84, minHeight: 42, borderWidth: 1, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  pickerConfirmText: { color: '#FFFFFF', fontWeight: '800' },
   multiline: { minHeight: 100 },
   hint: { fontSize: 11, lineHeight: 17 },
   error: { fontSize: 12, lineHeight: 17 },

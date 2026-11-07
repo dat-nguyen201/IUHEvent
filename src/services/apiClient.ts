@@ -24,6 +24,17 @@ export class ApiError extends Error {
   }
 }
 
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/** Registers the auth context callback for invalidated remote sessions. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
 export function getApiBaseUrl() {
   if (!API_BASE_URL) {
     throw new ApiError(
@@ -79,6 +90,12 @@ export async function apiRequest<T>(
       const message = typeof payloadMessage === 'string'
         ? payloadMessage
         : 'Yêu cầu chưa thực hiện được. Hãy thử lại.';
+      if (
+        options.token &&
+        (response.status === 401 || (response.status === 403 && code === 'ACCOUNT_SUSPENDED'))
+      ) {
+        unauthorizedHandler?.();
+      }
       throw new ApiError(code, message, response.status);
     }
 

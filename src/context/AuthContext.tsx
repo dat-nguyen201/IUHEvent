@@ -10,7 +10,7 @@ import {
   logoutDemoAccount,
   registerDemoAccount,
 } from '@/services/authService';
-import { ApiError } from '@/services/apiClient';
+import { ApiError, setUnauthorizedHandler } from '@/services/apiClient';
 import {
   getRemoteAuthSession,
   loginRemoteAccount,
@@ -40,6 +40,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isReady, setIsReady] = useState(false);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [hasSeenGetStarted, setHasSeenGetStarted] = useState(false);
+
+  useEffect(() => setUnauthorizedHandler(() => {
+    if (appMode !== 'remote') return;
+    setCurrentUser(null);
+    setUser(null);
+    setStartupError('SESSION_EXPIRED');
+    void logoutRemoteAccount().catch(() => undefined);
+  }), [setUser]);
 
   const restoreSession = useCallback(async () => {
     setIsReady(false);
