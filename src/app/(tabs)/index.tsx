@@ -25,6 +25,9 @@ import { eventCategories } from "@/data/events";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 import type { StudentEvent } from "@/types/events";
 import { getEvents } from "@/services/eventService";
+import { appMode } from "@/constants/app-mode";
+import { invalidateEventsCache } from "@/services/eventsApi";
+import { StatusMessage } from "@/components/StatusMessage";
 import { useTheme } from "@tamagui/core";
 import { getAvatarUri } from "@/services/avatarStorage";
 
@@ -48,26 +51,44 @@ export default function HomeScreen() {
     }, [user]),
   );
 
-  useEffect(() => {
-    async function loadHomeData() {
-      setIsLoading(true);
-      try {
-        const result = await getEvents({ page: 1, pageSize: 1000 });
-        const futureEvents = result.items
-          .filter((event) => isFutureEvent(event.startsAt))
-          .sort(
-            (a, b) =>
-              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-          );
-        setUpcomingEvents(futureEvents);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsLoading(false);
+  const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      async function loadHomeData() {
+        setIsLoading(true);
+        setError("");
+        try {
+          if (appMode === "remote") invalidateEventsCache();
+          const result = await getEvents({ page: 1, pageSize: 1000 });
+          if (!active) return;
+          const futureEvents = result.items
+            .filter((event) => isFutureEvent(event.startsAt))
+            .sort(
+              (a, b) =>
+                new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+            );
+          setUpcomingEvents(futureEvents);
+        } catch (cause) {
+          if (active) {
+            setUpcomingEvents([]);
+            setError(
+              "Không tải được sự kiện từ máy chủ. Hãy kiểm tra kết nối và thử lại.",
+            );
+            console.warn("[home] Không tải được sự kiện:", cause);
+          }
+        } finally {
+          if (active) setIsLoading(false);
+        }
       }
-    }
-    loadHomeData();
-  }, []);
+      void loadHomeData();
+      return () => {
+        active = false;
+      };
+    }, [retryCount]),
+  );
 
   const featured = upcomingEvents[0];
 
@@ -80,6 +101,19 @@ export default function HomeScreen() {
             Đang tải sự kiện...
           </Text>
         </View>
+      </Screen>
+    );
+  }
+
+  if (error) {
+    return (
+      <Screen>
+        <StatusMessage
+          title="Không thể tải sự kiện"
+          message={error}
+          actionLabel="Thử lại"
+          onAction={() => setRetryCount((current) => current + 1)}
+        />
       </Screen>
     );
   }

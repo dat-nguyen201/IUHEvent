@@ -1,6 +1,7 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -15,7 +16,10 @@ import { Screen } from "@/components/Screen";
 import { StatusMessage } from "@/components/StatusMessage";
 import { colors, spacing } from "@/constants/app-theme";
 import { useAppState } from "@/context/AppStateContext";
-import { getEventByIdSync } from "@/services/eventService";
+import { getEventById, getEventByIdSync } from "@/services/eventService";
+import { appMode } from "@/constants/app-mode";
+import { invalidateEventsCache } from "@/services/eventsApi";
+import type { StudentEvent } from "@/types/events";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 
 import { ReminderModal } from "@/components/ReminderModal";
@@ -24,7 +28,46 @@ import { useTheme } from "@tamagui/core";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const event = useMemo(() => (id ? getEventByIdSync(id) : undefined), [id]);
+  const [event, setEvent] = useState<StudentEvent | undefined>(() =>
+    id ? getEventByIdSync(id) : undefined,
+  );
+  const [loading, setLoading] = useState(appMode === "remote");
+  const [loadError, setLoadError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (appMode === "demo") {
+        setEvent(id ? getEventByIdSync(id) : undefined);
+        return () => {
+          active = false;
+        };
+      }
+      async function refreshDetail() {
+        setLoading(true);
+        setLoadError("");
+        try {
+          invalidateEventsCache();
+          const result = id ? await getEventById(id) : undefined;
+          if (active) setEvent(result);
+        } catch {
+          if (active) {
+            setEvent(undefined);
+            setLoadError(
+              "Không kết nối được máy chủ để tải thông tin sự kiện.",
+            );
+          }
+        } finally {
+          if (active) setLoading(false);
+        }
+      }
+      void refreshDetail();
+      return () => {
+        active = false;
+      };
+    }, [id, retryCount]),
+  );
   const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } =
     useAppState();
   const theme = useTheme();
@@ -42,6 +85,18 @@ export default function EventDetailScreen() {
     event?.startsAt ?? "",
   );
 
+  if (loading) {
+    return (
+      <Screen>
+        <ActivityIndicator
+          style={{ marginTop: 48 }}
+          size="large"
+          color={theme.primary.val}
+        />
+      </Screen>
+    );
+  }
+
   if (!event) {
     return (
       <Screen>
@@ -51,10 +106,19 @@ export default function EventDetailScreen() {
           </Text>
         </Pressable>
         <StatusMessage
-          title="Không tìm thấy sự kiện"
-          message="Sự kiện này có thể đã bị xóa hoặc đường dẫn không đúng."
-          actionLabel="Về danh sách"
-          onAction={() => router.replace("/(tabs)")}
+          title={
+            loadError ? "Không tải được sự kiện" : "Không tìm thấy sự kiện"
+          }
+          message={
+            loadError ||
+            "Sự kiện này có thể đã bị ẩn, lưu trữ hoặc đường dẫn không đúng."
+          }
+          actionLabel={loadError ? "Thử lại" : "Về danh sách"}
+          onAction={() =>
+            loadError
+              ? setRetryCount((value) => value + 1)
+              : router.replace("/(tabs)")
+          }
         />
       </Screen>
     );

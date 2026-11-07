@@ -109,7 +109,13 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <Badge
-              label={user?.role === "admin" ? (appMode === "demo" ? "Admin demo" : "Admin") : "Sinh viên"}
+              label={
+                user?.role === "admin"
+                  ? appMode === "demo"
+                    ? "Admin demo"
+                    : "Admin"
+                  : "Sinh viên"
+              }
               tone="success"
             />
           </View>
@@ -130,13 +136,18 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {appMode === "remote" && user?.role === "admin" && user.status === "active" ? (
+        {appMode === "remote" &&
+        user?.role === "admin" &&
+        user.status === "active" ? (
           <Pressable
-            onPress={() => router.push({ pathname: "/admin-users" } as never)}
-            style={[styles.adminButton, { backgroundColor: theme.primary.val }]}
+            accessibilityRole="button"
+            onPress={() => router.push("/admin/events")}
+            style={[styles.adminAccess, { backgroundColor: theme.primary.val }]}
           >
-            <Text style={styles.adminButtonText}>Quản lý sinh viên</Text>
-            <Text style={styles.adminButtonHint}>Xem hồ sơ và trạng thái tài khoản</Text>
+            <Text style={styles.adminAccessTitle}>Quản trị sự kiện IUH</Text>
+            <Text style={styles.adminAccessCaption}>
+              Quản lý sự kiện và tài khoản sinh viên →
+            </Text>
           </Pressable>
         ) : null}
 
@@ -334,6 +345,9 @@ const styles = StyleSheet.create({
   metricDivider: { backgroundColor: colors.border, height: 34, width: 1 },
   metricValue: { color: colors.text, fontSize: 21, fontWeight: "900" },
   metricLabel: { color: colors.mutedText, fontSize: 12 },
+  adminAccess: { borderRadius: 14, padding: 18, gap: 6 },
+  adminAccessTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  adminAccessCaption: { color: "#FFFFFF", fontSize: 12 },
   logoutButton: {
     alignItems: "center",
     borderColor: colors.danger,

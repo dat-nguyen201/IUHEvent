@@ -91,7 +91,7 @@ export default function AdminUsersScreen() {
     setSelectedUser(item);
     try {
       const response = await getAdminUser(item.id);
-      setSelectedUser(response.user);
+      setSelectedUser(response);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Không thể tải chi tiết sinh viên.');
     }
@@ -101,8 +101,8 @@ export default function AdminUsersScreen() {
     if (!editingUser) return;
     try {
       const response = await updateAdminUserProfile(editingUser.id, input);
-      setUsers((current) => current.map((item) => item.id === response.user.id ? response.user : item));
-      setSelectedUser(response.user);
+      setUsers((current) => current.map((item) => item.id === response.id ? response : item));
+      setSelectedUser(response);
       setEditingUser(null);
     } catch (error) {
       Alert.alert('Không thể lưu', error instanceof Error ? error.message : 'Vui lòng thử lại.');
@@ -128,8 +128,8 @@ export default function AdminUsersScreen() {
   const changeStatus = async (item: AuthUser, status: UserStatus) => {
     try {
       const response = await updateAdminUserStatus(item.id, status);
-      setUsers((current) => current.map((entry) => entry.id === response.user.id ? response.user : entry));
-      setSelectedUser(response.user);
+      setUsers((current) => current.map((entry) => entry.id === response.id ? response : entry));
+      setSelectedUser(response);
     } catch (error) {
       Alert.alert('Không thể cập nhật', error instanceof Error ? error.message : 'Vui lòng thử lại.');
     }

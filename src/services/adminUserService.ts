@@ -1,6 +1,7 @@
-import { apiRequest } from '@/services/apiClient';
-import { getRemoteAccessToken } from '@/services/remoteAuthService';
-import type { AuthUser, UserStatus } from '@/types/auth';
+import { appMode } from "@/constants/app-mode";
+import { ApiError, apiRequest } from "@/services/apiClient";
+import { getRemoteAccessToken } from "@/services/remoteAuthService";
+import type { AuthUser, UserStatus } from "@/types/auth";
 
 export type AdminUsersPage = {
   data: AuthUser[];
@@ -9,49 +10,90 @@ export type AdminUsersPage = {
   pageSize: number;
   hasMore: boolean;
 };
+type AdminUserProfile = { name: string; studentId: string; major: string };
 
-async function adminRequest<T>(path: string, options: Parameters<typeof apiRequest<T>>[1] = {}) {
-  const token = await getRemoteAccessToken();
-  return apiRequest<T>(path, { ...options, token });
+async function token() {
+  if (appMode !== "remote")
+    throw new ApiError(
+      "FORBIDDEN",
+      "Tính năng quản trị chỉ khả dụng ở remote mode.",
+    );
+  const value = await getRemoteAccessToken();
+  if (!value)
+    throw new ApiError("UNAUTHORIZED", "Vui lòng đăng nhập lại.", 401);
+  return value;
+}
+function path(id: string) {
+  return `/api/admin/users/${encodeURIComponent(id)}`;
 }
 
-export function listAdminUsers({
-  page,
-  pageSize = 20,
-  query,
+export async function listAdminUsers({
+  page = 1,
+  pageSize = 10,
+  query = "",
   status,
 }: {
-  page: number;
+  page?: number;
   pageSize?: number;
   query?: string;
-  status?: UserStatus | 'all';
-}) {
-  const params = new URLSearchParams({
+  status?: UserStatus | "all";
+} = {}): Promise<AdminUsersPage> {
+  const search = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
-  if (query?.trim()) params.set('query', query.trim());
-  if (status && status !== 'all') params.set('status', status);
-  return adminRequest<AdminUsersPage>(`/api/admin/users?${params.toString()}`);
+  if (query.trim()) search.set("query", query.trim());
+  if (status && status !== "all") search.set("status", status);
+  return apiRequest<AdminUsersPage>(`/api/admin/users?${search.toString()}`, {
+    token: await token(),
+  });
 }
 
-export function getAdminUser(userId: string) {
-  return adminRequest<{ user: AuthUser }>(`/api/admin/users/${encodeURIComponent(userId)}`);
+export async function getAdminUser(id: string): Promise<AuthUser> {
+  const response = await apiRequest<{ user: AuthUser }>(path(id), {
+    token: await token(),
+  });
+  return response.user;
 }
 
-export function updateAdminUserProfile(
-  userId: string,
-  input: Pick<AuthUser, 'name' | 'studentId' | 'major'>,
+export async function updateAdminUserProfile(
+  id: string,
+  data: AdminUserProfile,
 ) {
-  return adminRequest<{ user: AuthUser }>(
-    `/api/admin/users/${encodeURIComponent(userId)}/profile`,
-    { method: 'PATCH', body: input },
-  );
+  const response = await apiRequest<{ user: AuthUser }>(`${path(id)}/profile`, {
+    token: await token(),
+    method: "PATCH",
+    body: data,
+  });
+  return response.user;
 }
 
-export function updateAdminUserStatus(userId: string, status: UserStatus) {
-  return adminRequest<{ user: AuthUser }>(
-    `/api/admin/users/${encodeURIComponent(userId)}/status`,
-    { method: 'PATCH', body: { status } },
-  );
+export async function setAdminUserStatus(id: string, status: UserStatus) {
+  const response = await apiRequest<{ user: AuthUser }>(`${path(id)}/status`, {
+    token: await token(),
+    method: "PATCH",
+    body: { status },
+  });
+  return response.user;
+}
+
+export const updateAdminUserStatus = setAdminUserStatus;
+
+export function getAdminUserError(error: unknown) {
+  if (error instanceof ApiError) {
+    const labels: Record<string, string> = {
+      UNAUTHORIZED: "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",
+      FORBIDDEN: "Bạn không có quyền quản trị người dùng.",
+      ACCOUNT_SUSPENDED: "Tài khoản đã bị khóa.",
+      USER_NOT_FOUND: "Không tìm thấy người dùng.",
+      STUDENT_ID_EXISTS: "Mã sinh viên đã được sử dụng.",
+      CANNOT_SUSPEND_SELF: "Không thể tự khóa tài khoản admin đang đăng nhập.",
+      LAST_ACTIVE_ADMIN: "Không thể khóa tài khoản admin hoạt động cuối cùng.",
+      VALIDATION_ERROR: "Thông tin chưa hợp lệ.",
+    };
+    return labels[error.code] ?? error.message;
+  }
+  return error instanceof Error
+    ? error.message
+    : "Thao tác không thành công. Vui lòng thử lại.";
 }
