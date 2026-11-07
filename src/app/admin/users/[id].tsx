@@ -61,7 +61,7 @@ export default function AdminUserDetailScreen() {
   return <Screen>
     <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Pressable accessibilityRole="button" style={styles.back} onPress={() => router.replace('/admin/users')}><Ionicons name="arrow-back" color={theme.color.val} size={20} /><Text style={{ color: theme.color.val, fontWeight: '800' }}>Danh sách tài khoản</Text></Pressable>
+        <Pressable accessibilityRole="button" style={styles.back} onPress={() => router.replace('/admin/users' as never)}><Ionicons name="arrow-back" color={theme.color.val} size={20} /><Text style={{ color: theme.color.val, fontWeight: '800' }}>Danh sách tài khoản</Text></Pressable>
         <Text style={[styles.title, { color: theme.color.val }]}>Hồ sơ sinh viên</Text>
         {loading ? <ActivityIndicator size="large" color={theme.primary.val} style={styles.loader} /> : !user ? <AdminPanel><AdminNotice>{error || 'Không tìm thấy tài khoản.'}</AdminNotice><AdminButton label="Thử lại" onPress={() => void loadUser()} /></AdminPanel> :
           <AdminPanel>

@@ -61,7 +61,7 @@ export default function AdminUsersScreen() {
 
   return <Screen>
     <View style={styles.root}>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/admin/events')} style={styles.link}><Ionicons name="arrow-back" size={18} color={theme.color.val} /><Text style={{ color: theme.color.val, fontWeight: '800' }}>Quản trị sự kiện</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/admin/events' as never)} style={styles.link}><Ionicons name="arrow-back" size={18} color={theme.color.val} /><Text style={{ color: theme.color.val, fontWeight: '800' }}>Quản trị sự kiện</Text></Pressable>
       <Text style={[styles.heading, { color: theme.color.val }]}>Quản lý sinh viên</Text>
       <Text style={[styles.sub, { color: theme.muted.val }]}>Xem hồ sơ, cập nhật thông tin và khóa/mở tài khoản.</Text>
       <View style={[styles.search, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
@@ -78,10 +78,10 @@ export default function AdminUsersScreen() {
           <Text style={[styles.meta, { color: theme.muted.val }]}>{item.studentId} · {item.role === 'admin' ? 'Admin' : 'Sinh viên'}</Text>
           <Text style={[styles.meta, { color: theme.muted.val }]}>{item.email}</Text>
           <Text style={[styles.meta, { color: theme.muted.val }]}>{item.major || 'Chưa khai báo ngành'}</Text>
-          <View style={styles.actions}><AdminButton label="Chi tiết / sửa" compact icon="create-outline" variant="secondary" onPress={() => router.push({ pathname: '/admin/users/[id]', params: { id: item.id } })} /><AdminButton label={item.status === 'active' ? 'Khóa' : 'Mở khóa'} compact variant={item.status === 'active' ? 'danger' : 'primary'} onPress={() => setPending(item)} /></View>
+          <View style={styles.actions}><AdminButton label="Chi tiết / sửa" compact icon="create-outline" variant="secondary" onPress={() => router.push({ pathname: '/admin/users/[id]', params: { id: item.id } } as never)} /><AdminButton label={item.status === 'active' ? 'Khóa' : 'Mở khóa'} compact variant={item.status === 'active' ? 'danger' : 'primary'} onPress={() => setPending(item)} /></View>
         </AdminPanel>}
         ListEmptyComponent={<View style={styles.message}><Text style={{ color: theme.muted.val }}>Không tìm thấy tài khoản phù hợp.</Text></View>}
-        ListFooterComponent={total ? <View style={styles.pageRow}><AdminButton label="Trước" compact variant="secondary" disabled={page === 1} onPress={() => setPage(n => n - 1)} /><Text style={{ color: theme.color.val, fontSize: 12 }}>Trang {page} / {Math.ceil(total / PAGE_SIZE)}</Text><AdminButton label="Sau" compact variant="secondary" disabled={!hasMore} onPress={() => setPage(n => n + 1)} /></View> : null}
+        ListFooterComponent={total ? <View style={styles.pageRow}><AdminButton label="Trước" compact variant="secondary" disabled={page === 1} onPress={() => setPage(n => n - 1)} /><Text style={{ color: theme.color.val, fontSize: 12 }}>Trang {page} / {Math.ceil(total / PAGE_SIZE)}</Text><AdminButton label="Sau" compact variant="secondary" disabled={!hasMore} onPress={() => setPage(n => n + 1)} /></View> : undefined}
       />}
     </View>
     <AdminConfirmDialog visible={Boolean(pending)} title={pending?.status === 'active' ? 'Khóa tài khoản?' : 'Mở khóa tài khoản?'} message={`Bạn có chắc muốn ${pending?.status === 'active' ? 'khóa' : 'mở khóa'} tài khoản ${pending?.name ?? ''}?`} confirmLabel={pending?.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'} danger={pending?.status === 'active'} busy={busy} onCancel={() => setPending(null)} onConfirm={() => void changeStatus()} />

@@ -141,7 +141,7 @@ export default function ProfileScreen() {
         user.status === "active" ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/admin/events")}
+            onPress={() => router.push("/admin/events" as never)}
             style={[styles.adminAccess, { backgroundColor: theme.primary.val }]}
           >
             <Text style={styles.adminAccessTitle}>Quản trị sự kiện IUH</Text>

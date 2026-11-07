@@ -25,7 +25,7 @@ export default function IntroScreen() {
     else
       router.replace(
         mode === "remote" && user.role === "admin"
-          ? "/admin/events"
+          ? ("/admin/events" as never)
           : "/(tabs)",
       );
   }, [introElapsed, isReady, user, mode, hasSeenGetStarted]);

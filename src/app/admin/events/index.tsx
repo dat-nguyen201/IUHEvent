@@ -117,7 +117,7 @@ export default function AdminEventsScreen() {
       <View style={styles.metaLine}><Ionicons name="location-outline" color={theme.muted.val} size={15} /><Text numberOfLines={2} style={[styles.metaText, { color: theme.muted.val }]}>{item.location} · {item.organizer}</Text></View>
       <View style={styles.metaLine}><Ionicons name="people-outline" color={theme.muted.val} size={15} /><Text style={[styles.metaText, { color: theme.muted.val }]}>Sức chứa {item.capacity} · Đã check-in {item.checkedInCount}</Text></View>
       <View style={styles.buttons}>
-        <AdminButton label="Sửa" icon="create-outline" compact variant="secondary" onPress={() => router.push({ pathname: '/admin/events/[id]', params: { id: item.id } })} />
+        <AdminButton label="Sửa" icon="create-outline" compact variant="secondary" onPress={() => router.push({ pathname: '/admin/events/[id]', params: { id: item.id } } as never)} />
         {item.status === 'draft' ? <AdminButton label="Đăng" icon="send-outline" compact onPress={() => setPending({ event: item, status: 'published' })} /> : null}
         {item.status === 'published' ? <AdminButton label="Hủy đăng" icon="eye-off-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
         {item.status === 'archived' ? <AdminButton label="Khôi phục nháp" icon="refresh-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
@@ -143,8 +143,8 @@ export default function AdminEventsScreen() {
           </Pressable>
         </View>
         <View style={styles.adminNav}>
-          <View style={styles.adminNavItem}><AdminButton label="Thêm sự kiện" icon="add-circle-outline" onPress={() => router.push('/admin/events/new')} /></View>
-          <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users')} /></View>
+          <View style={styles.adminNavItem}><AdminButton label="Thêm sự kiện" icon="add-circle-outline" onPress={() => router.push('/admin/events/new' as never)} /></View>
+          <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Ionicons name="search" size={19} color={theme.muted.val} />
@@ -186,7 +186,7 @@ export default function AdminEventsScreen() {
               <AdminButton label="Trang trước" icon="chevron-back" variant="secondary" compact disabled={page === 1} onPress={() => setPage(value => Math.max(1, value - 1))} />
               <Text style={[styles.pageText, { color: theme.color.val }]}>Trang {page} / {Math.max(1, Math.ceil(total / PAGE_SIZE))}</Text>
               <AdminButton label="Trang sau" icon="chevron-forward" variant="secondary" compact disabled={!hasMore} onPress={() => setPage(value => value + 1)} />
-            </View> : null}
+            </View> : undefined}
           />
         )}
       </View>

@@ -14,9 +14,6 @@ import {
 const REMOTE_TOKEN_KEY = "iuh-event-remote-access-token";
 
 /** Cùng token đã xác thực; quyền admin vẫn luôn được backend kiểm tra. */
-export function getRemoteAccessToken() {
-  return getStoredValue(REMOTE_TOKEN_KEY);
-}
 
 type AuthResponse = { accessToken: string; user: unknown };
 type SessionResponse = { user: unknown };

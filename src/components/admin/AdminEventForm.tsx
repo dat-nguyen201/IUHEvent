@@ -58,7 +58,7 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
     try {
       if (eventId) await updateAdminEvent(eventId, checked.input);
       else await createAdminEvent(checked.input);
-      router.replace({ pathname: '/admin/events', params: { feedback: eventId ? 'updated' : 'created' } });
+      router.replace({ pathname: '/admin/events', params: { feedback: eventId ? 'updated' : 'created' } } as never);
     } catch (error) { setSaveError(getAdminEventError(error)); }
     finally { setBusy(false); }
   };
@@ -73,7 +73,7 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
     <Screen>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Pressable accessibilityRole="button" onPress={() => router.replace('/admin/events')} style={styles.back}>
+          <Pressable accessibilityRole="button" onPress={() => router.replace('/admin/events' as never)} style={styles.back}>
             <Ionicons name="arrow-back" size={20} color={theme.color.val} />
             <Text style={[styles.backText, { color: theme.color.val }]}>Danh sách sự kiện</Text>
           </Pressable>
@@ -109,7 +109,7 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
               <EventInput label="URL hình ảnh (tùy chọn)" value={values.imageUrl} disabled={busy} error={errors.imageUrl} placeholder="https://..." keyboardType="url" onChange={text => setField('imageUrl', text)} />
               {saveError ? <AdminNotice>{saveError}</AdminNotice> : null}
               <View style={styles.actions}>
-                <AdminButton label="Hủy" variant="secondary" disabled={busy} onPress={() => router.replace('/admin/events')} />
+                <AdminButton label="Hủy" variant="secondary" disabled={busy} onPress={() => router.replace('/admin/events' as never)} />
                 <AdminButton label={isEditing ? 'Lưu thay đổi' : 'Tạo bản nháp'} icon="save-outline" busy={busy} onPress={() => void save()} />
               </View>
             </AdminPanel>
