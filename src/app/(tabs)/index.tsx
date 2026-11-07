@@ -1,9 +1,10 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Image,
   ImageBackground,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import Animated, {
 
 import { Badge } from "@/components/Badge";
 import { Screen } from "@/components/Screen";
+import { StatusMessage } from "@/components/StatusMessage";
 import { colors, spacing } from "@/constants/app-theme";
 import { useAppState } from "@/context/AppStateContext";
 import { eventCategories } from "@/data/events";
@@ -27,7 +29,7 @@ import type { StudentEvent } from "@/types/events";
 import { getEvents } from "@/services/eventService";
 import { appMode } from "@/constants/app-mode";
 import { invalidateEventsCache } from "@/services/eventsApi";
-import { StatusMessage } from "@/components/StatusMessage";
+import { ApiError } from "@/services/apiClient";
 import { useTheme } from "@tamagui/core";
 import { getAvatarUri } from "@/services/avatarStorage";
 
@@ -51,43 +53,43 @@ export default function HomeScreen() {
     }, [user]),
   );
 
-  const [error, setError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadHomeData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+    try {
+      if (appMode === "remote") invalidateEventsCache();
+      const result = await getEvents({ page: 1, pageSize: 50, upcomingOnly: true });
+      const futureEvents = result.items
+        .filter((event) => isFutureEvent(event.startsAt))
+        .sort(
+          (a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        );
+      setUpcomingEvents(futureEvents);
+    } catch (e) {
+      console.error(e);
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Không thể kết nối máy chủ. Hãy kiểm tra kết nối mạng và thử lại.",
+      );
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      async function loadHomeData() {
-        setIsLoading(true);
-        setError("");
-        try {
-          if (appMode === "remote") invalidateEventsCache();
-          const result = await getEvents({ page: 1, pageSize: 1000 });
-          if (!active) return;
-          const futureEvents = result.items
-            .filter((event) => isFutureEvent(event.startsAt))
-            .sort(
-              (a, b) =>
-                new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-            );
-          setUpcomingEvents(futureEvents);
-        } catch (cause) {
-          if (active) {
-            setUpcomingEvents([]);
-            setError(
-              "Không tải được sự kiện từ máy chủ. Hãy kiểm tra kết nối và thử lại.",
-            );
-            console.warn("[home] Không tải được sự kiện:", cause);
-          }
-        } finally {
-          if (active) setIsLoading(false);
-        }
-      }
       void loadHomeData();
-      return () => {
-        active = false;
-      };
-    }, [retryCount]),
+    }, [loadHomeData]),
   );
 
   const featured = upcomingEvents[0];
@@ -105,14 +107,14 @@ export default function HomeScreen() {
     );
   }
 
-  if (error) {
+  if (error && upcomingEvents.length === 0) {
     return (
       <Screen>
         <StatusMessage
           title="Không thể tải sự kiện"
           message={error}
           actionLabel="Thử lại"
-          onAction={() => setRetryCount((current) => current + 1)}
+          onAction={() => loadHomeData()}
         />
       </Screen>
     );
@@ -123,6 +125,14 @@ export default function HomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadHomeData(true)}
+            colors={[theme.primary.val]}
+            tintColor={theme.primary.val}
+          />
+        }
       >
         <View style={styles.header}>
           <View style={styles.greeting}>

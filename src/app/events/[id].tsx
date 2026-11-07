@@ -1,5 +1,5 @@
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,57 +19,32 @@ import { useAppState } from "@/context/AppStateContext";
 import { getEventById, getEventByIdSync } from "@/services/eventService";
 import { appMode } from "@/constants/app-mode";
 import { invalidateEventsCache } from "@/services/eventsApi";
-import type { StudentEvent } from "@/types/events";
+import { ApiError } from "@/services/apiClient";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 
 import { ReminderModal } from "@/components/ReminderModal";
 import { useEventReminder } from "@/hooks/use-event-reminder";
 import { useTheme } from "@tamagui/core";
+import type { StudentEvent } from "@/types/events";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [event, setEvent] = useState<StudentEvent | undefined>(() =>
     id ? getEventByIdSync(id) : undefined,
   );
-  const [loading, setLoading] = useState(appMode === "remote");
-  const [loadError, setLoadError] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(!event);
+  const [error, setError] = useState<string | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      if (appMode === "demo") {
-        setEvent(id ? getEventByIdSync(id) : undefined);
-        return () => {
-          active = false;
-        };
-      }
-      async function refreshDetail() {
-        setLoading(true);
-        setLoadError("");
-        try {
-          invalidateEventsCache();
-          const result = id ? await getEventById(id) : undefined;
-          if (active) setEvent(result);
-        } catch {
-          if (active) {
-            setEvent(undefined);
-            setLoadError(
-              "Không kết nối được máy chủ để tải thông tin sự kiện.",
-            );
-          }
-        } finally {
-          if (active) setLoading(false);
-        }
-      }
-      void refreshDetail();
-      return () => {
-        active = false;
-      };
-    }, [id, retryCount]),
-  );
-  const { checkedInEventIds, isEventSaved, saveEvent, unsaveEvent } =
-    useAppState();
+  const {
+    checkedInEventIds,
+    isEventSaved,
+    isEventRegistered,
+    saveEvent,
+    unsaveEvent,
+    registerEvent,
+    cancelRegistration,
+  } = useAppState();
   const theme = useTheme();
 
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
@@ -85,13 +60,68 @@ export default function EventDetailScreen() {
     event?.startsAt ?? "",
   );
 
-  if (loading) {
+  const loadEventDetail = useCallback(async () => {
+    if (!id) return;
+    if (!event) setIsLoading(true);
+    setError(null);
+    try {
+      if (appMode === "remote") invalidateEventsCache();
+      const data = await getEventById(id);
+      if (data) {
+        setEvent(data);
+      } else {
+        setError("EVENT_NOT_FOUND");
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setError("EVENT_NOT_FOUND");
+      } else {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Không thể tải thông tin sự kiện. Hãy kiểm tra kết nối mạng.",
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id, event]);
+
+  useEffect(() => {
+    void loadEventDetail();
+  }, [loadEventDetail]);
+
+  if (isLoading && !event) {
     return (
       <Screen>
-        <ActivityIndicator
-          style={{ marginTop: 48 }}
-          size="large"
-          color={theme.primary.val}
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={[styles.backText, { color: theme.color.val }]}>
+            ‹ Quay lại
+          </Text>
+        </Pressable>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary.val} />
+          <Text style={{ marginTop: 12, color: theme.muted.val }}>
+            Đang tải thông tin sự kiện...
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (error && error !== "EVENT_NOT_FOUND" && !event) {
+    return (
+      <Screen>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Text style={[styles.backText, { color: theme.color.val }]}>
+            ‹ Quay lại
+          </Text>
+        </Pressable>
+        <StatusMessage
+          title="Không thể tải sự kiện"
+          message={error}
+          actionLabel="Thử lại"
+          onAction={() => loadEventDetail()}
         />
       </Screen>
     );
@@ -106,27 +136,106 @@ export default function EventDetailScreen() {
           </Text>
         </Pressable>
         <StatusMessage
-          title={
-            loadError ? "Không tải được sự kiện" : "Không tìm thấy sự kiện"
-          }
-          message={
-            loadError ||
-            "Sự kiện này có thể đã bị ẩn, lưu trữ hoặc đường dẫn không đúng."
-          }
-          actionLabel={loadError ? "Thử lại" : "Về danh sách"}
-          onAction={() =>
-            loadError
-              ? setRetryCount((value) => value + 1)
-              : router.replace("/(tabs)")
-          }
+          title="Không tìm thấy sự kiện"
+          message="Sự kiện này có thể đã bị ẩn, lưu trữ hoặc đường dẫn không đúng."
+          actionLabel="Về danh sách"
+          onAction={() => router.replace("/(tabs)")}
         />
       </Screen>
     );
   }
 
   const saved = isEventSaved(event.id);
+  const registered = isEventRegistered(event.id);
   const checkedIn = checkedInEventIds.includes(event.id);
   const isEventExpired = !isFutureEvent(event.startsAt);
+
+  const handleToggleSave = async () => {
+    if (!saved && isEventExpired) {
+      Alert.alert(
+        "Sự kiện đã kết thúc",
+        "Sự kiện này đã kết thúc, bạn không thể lưu vào lịch nữa.",
+      );
+      return;
+    }
+
+    try {
+      if (saved) {
+        await unsaveEvent(event.id);
+      } else {
+        await saveEvent(event.id);
+      }
+    } catch (err) {
+      Alert.alert(
+        "Lỗi",
+        err instanceof ApiError
+          ? err.message
+          : "Không thể thực hiện thao tác. Hãy thử lại.",
+      );
+    }
+  };
+
+  const handleRegister = async () => {
+    if (isEventExpired) {
+      Alert.alert(
+        "Sự kiện đã kết thúc",
+        "Sự kiện này đã bắt đầu hoặc kết thúc, không thể đăng ký tham gia.",
+      );
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      await registerEvent(event.id);
+      Alert.alert(
+        "Đăng ký thành công",
+        "Bạn đã đăng ký tham gia sự kiện. Hãy đến đúng giờ và chuẩn bị mã QR để điểm danh nhé!",
+      );
+    } catch (err) {
+      Alert.alert(
+        "Đăng ký không thành công",
+        err instanceof ApiError ? err.message : "Hãy kiểm tra kết nối mạng và thử lại.",
+      );
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleCancelRegistration = () => {
+    if (checkedIn) {
+      Alert.alert(
+        "Không thể hủy",
+        "Bạn đã điểm danh tham gia sự kiện, không thể hủy đăng ký.",
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Xác nhận hủy đăng ký",
+      "Bạn có chắc muốn hủy đăng ký tham gia sự kiện này?",
+      [
+        { text: "Giữ lại", style: "cancel" },
+        {
+          text: "Hủy đăng ký",
+          style: "destructive",
+          onPress: async () => {
+            setIsActionLoading(true);
+            try {
+              await cancelRegistration(event.id);
+              Alert.alert("Đã hủy đăng ký", "Bạn đã hủy đăng ký tham gia sự kiện.");
+            } catch (err) {
+              Alert.alert(
+                "Lỗi",
+                err instanceof ApiError ? err.message : "Không thể hủy đăng ký. Hãy thử lại.",
+              );
+            } finally {
+              setIsActionLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <Screen>
@@ -179,9 +288,23 @@ export default function EventDetailScreen() {
           <Text style={[styles.infoValue, { color: theme.color.val }]}>
             {event.organizer}
           </Text>
+          {event.capacity > 0 && (
+            <>
+              <Text style={[styles.infoLabel, { color: theme.muted.val }]}>
+                Sức chứa
+              </Text>
+              <Text style={[styles.infoValue, { color: theme.color.val }]}>
+                {event.capacity} người tham gia
+              </Text>
+            </>
+          )}
         </View>
 
         <View style={styles.statusRow}>
+          <Badge
+            label={registered ? "Đã đăng ký" : "Chưa đăng ký"}
+            tone={registered ? "success" : "neutral"}
+          />
           <Badge
             label={saved ? "Đã lưu" : "Chưa lưu"}
             tone={saved ? "success" : "neutral"}
@@ -193,8 +316,9 @@ export default function EventDetailScreen() {
           {isReminderSet && <Badge label="Đã bật nhắc nhở" tone="success" />}
         </View>
 
-        {/* Member 4: QR Check-in Action */}
+        {/* Action Section */}
         <View style={styles.actionSection}>
+          {/* Registration Button */}
           {checkedIn ? (
             <View style={styles.checkedInBanner}>
               <Text style={styles.checkedInIcon}>✅</Text>
@@ -203,11 +327,55 @@ export default function EventDetailScreen() {
                   Bạn đã điểm danh sự kiện này
                 </Text>
                 <Text style={styles.checkedInSub}>
-                  Thông tin tham gia đã được ghi nhận vào lịch sử học tập.
+                  Thông tin tham gia đã được ghi nhận vào lịch sử của bạn.
                 </Text>
               </View>
             </View>
+          ) : registered ? (
+            <Pressable
+              onPress={handleCancelRegistration}
+              disabled={isActionLoading}
+              style={[
+                styles.cancelRegButton,
+                {
+                  backgroundColor: theme.surface.val,
+                  borderColor: theme.danger.val,
+                },
+              ]}
+            >
+              {isActionLoading ? (
+                <ActivityIndicator size="small" color={theme.danger.val} />
+              ) : (
+                <Text style={[styles.cancelRegButtonText, { color: theme.danger.val }]}>
+                  Hủy đăng ký tham gia
+                </Text>
+              )}
+            </Pressable>
           ) : (
+            <Pressable
+              onPress={handleRegister}
+              disabled={isActionLoading || isEventExpired}
+              style={[
+                styles.primaryButton,
+                {
+                  backgroundColor: isEventExpired
+                    ? "#94A3B8"
+                    : theme.primary.val,
+                },
+              ]}
+            >
+              {isActionLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {isEventExpired ? "Sự kiện đã kết thúc" : "Đăng ký tham gia ngay"}
+                </Text>
+              )}
+            </Pressable>
+          )}
+
+          {/* QR Check-in Action */}
+          {!checkedIn && (
             <Pressable
               onPress={() => {
                 if (isEventExpired) {
@@ -227,7 +395,7 @@ export default function EventDetailScreen() {
                 {
                   backgroundColor: isEventExpired
                     ? "#94A3B8"
-                    : theme.primary.val,
+                    : "#0F172A",
                 },
               ]}
             >
@@ -235,12 +403,12 @@ export default function EventDetailScreen() {
               <Text style={styles.qrButtonText}>
                 {isEventExpired
                   ? "Sự kiện đã kết thúc"
-                  : "Quét mã QR Check-in ngay"}
+                  : "Quét mã QR Check-in"}
               </Text>
             </Pressable>
           )}
 
-          {/* Member 4: Event Reminder Button */}
+          {/* Event Reminder Button */}
           <Pressable
             onPress={() => {
               if (isEventExpired) {
@@ -276,34 +444,24 @@ export default function EventDetailScreen() {
             </Text>
           </Pressable>
 
+          {/* Bookmark Button (Save/Unsave) */}
           <Pressable
-            onPress={() => {
-              if (!saved && isEventExpired) {
-                Alert.alert(
-                  "Sự kiện đã kết thúc",
-                  "Sự kiện này đã kết thúc, bạn không thể lưu hoặc check-in nữa.",
-                );
-                return;
-              }
-
-              saved ? unsaveEvent(event.id) : saveEvent(event.id);
-            }}
+            onPress={handleToggleSave}
             style={[
-              styles.primaryButton,
-              { backgroundColor: theme.primary.val },
-              saved && {
+              styles.secondaryButton,
+              {
                 backgroundColor: theme.surface.val,
-                borderColor: theme.danger.val,
+                borderColor: saved ? theme.danger.val : theme.border.val,
               },
             ]}
           >
             <Text
               style={[
-                styles.primaryButtonText,
-                saved && { color: theme.danger.val },
+                styles.secondaryButtonText,
+                { color: saved ? theme.danger.val : theme.color.val },
               ]}
             >
-              {saved ? "Hủy lưu sự kiện" : "Lưu vào lịch"}
+              {saved ? "Bỏ lưu khỏi lịch" : "Lưu vào lịch"}
             </Text>
           </Pressable>
         </View>
@@ -333,6 +491,11 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+  },
   content: {
     gap: spacing.md,
     paddingBottom: spacing.xl,
@@ -359,9 +522,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "900",
-    lineHeight: 36,
+    lineHeight: 34,
   },
   description: {
     color: colors.mutedText,
@@ -399,18 +562,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: spacing.md,
   },
-  secondaryButton: {
-    backgroundColor: colors.surface,
-    borderColor: colors.danger,
-    borderWidth: 1,
-  },
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "900",
   },
+  cancelRegButton: {
+    alignItems: "center",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    paddingVertical: spacing.md,
+  },
+  cancelRegButtonText: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  secondaryButton: {
+    alignItems: "center",
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: spacing.md,
+  },
   secondaryButtonText: {
-    color: colors.danger,
+    fontSize: 15,
+    fontWeight: "700",
   },
   actionSection: {
     gap: spacing.sm,
@@ -469,10 +644,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     justifyContent: "center",
     paddingVertical: spacing.md,
-  },
-  reminderButtonActive: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#22C55E",
   },
   reminderButtonIcon: {
     fontSize: 18,

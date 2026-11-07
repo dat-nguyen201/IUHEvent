@@ -19,7 +19,8 @@ import { Badge } from '@/components/Badge';
 import { colors, spacing } from '@/constants/app-theme';
 import { useAppState } from '@/context/AppStateContext';
 import { studentEvents } from '@/data/events';
-import { getEventByIdSync } from '@/services/eventService';
+import { getEventById, getEventByIdSync } from '@/services/eventService';
+import { ApiError } from '@/services/apiClient';
 import type { StudentEvent } from '@/types/events';
 import { formatEventDate } from '@/utils/date';
 import { useTheme } from '@tamagui/core';
@@ -52,14 +53,16 @@ export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { eventId: preselectedEventId } = useLocalSearchParams<{ eventId?: string }>();
-  const { checkedInEventIds, checkInEvent, isEventSaved, saveEvent } = useAppState();
+  const { checkedInEventIds, checkInEvent } = useAppState();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [manualInput, setManualInput] = useState(preselectedEventId ?? '');
-  const [showManualSection, setShowManualSection] = useState(Platform.OS === 'web' || Boolean(preselectedEventId));
+  const [showManualSection, setShowManualSection] = useState(
+    Platform.OS === 'web' || Boolean(preselectedEventId),
+  );
 
   useEffect(() => {
     if (preselectedEventId) {
@@ -77,13 +80,20 @@ export default function CheckInScreen() {
   const processingRef = useRef(false);
 
   const handleProcessQr = useCallback(
-    (rawData: string) => {
+    async (rawData: string) => {
       if (processingRef.current) return;
       processingRef.current = true;
       setScanned(true);
 
       const parsedEventId = parseEventQrCode(rawData);
-      const foundEvent = parsedEventId ? getEventByIdSync(parsedEventId) : undefined;
+      let foundEvent = parsedEventId ? getEventByIdSync(parsedEventId) : undefined;
+      if (!foundEvent && parsedEventId) {
+        try {
+          foundEvent = await getEventById(parsedEventId);
+        } catch {
+          // Event not found via API
+        }
+      }
 
       if (!foundEvent) {
         setScanResult({
@@ -106,21 +116,41 @@ export default function CheckInScreen() {
         return;
       }
 
-      // Check-in success!
-      checkInEvent(foundEvent.id);
-      if (!isEventSaved(foundEvent.id)) {
-        saveEvent(foundEvent.id);
-      }
+      try {
+        const result = await checkInEvent(foundEvent.id, rawData);
+        if (result && !result.success) {
+          setScanResult({
+            status: 'invalid',
+            event: foundEvent,
+            scannedCode: rawData,
+            message: result.message || 'Mã QR không hợp lệ hoặc sự kiện đã kết thúc.',
+          });
+          processingRef.current = false;
+          return;
+        }
 
-      setScanResult({
-        status: 'success',
-        event: foundEvent,
-        scannedCode: rawData,
-        message: `Điểm danh thành công sự kiện "${foundEvent.title}"! Dữ liệu đã được ghi nhận.`,
-      });
-      processingRef.current = false;
+        setScanResult({
+          status: 'success',
+          event: foundEvent,
+          scannedCode: rawData,
+          message: `Điểm danh thành công sự kiện "${foundEvent.title}"! Dữ liệu đã được ghi nhận.`,
+        });
+      } catch (error) {
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Không thể ghi nhận điểm danh. Hãy thử lại.';
+        setScanResult({
+          status: 'invalid',
+          event: foundEvent,
+          scannedCode: rawData,
+          message,
+        });
+      } finally {
+        processingRef.current = false;
+      }
     },
-    [checkInEvent, checkedInEventIds, isEventSaved, saveEvent],
+    [checkInEvent, checkedInEventIds],
   );
 
   const resetScanner = () => {
@@ -132,24 +162,48 @@ export default function CheckInScreen() {
   const isWeb = Platform.OS === 'web';
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background.val, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: theme.background.val,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
+      ]}
+    >
       {/* Top Header */}
-      <View style={[styles.topBar, { backgroundColor: theme.surface.val, borderBottomColor: theme.border.val }]}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: theme.surface.val,
+            borderBottomColor: theme.border.val,
+          },
+        ]}
+      >
         <Pressable onPress={() => router.back()} style={styles.circleButton}>
           <Text style={styles.buttonText}>✕</Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.color.val }]}>Quét mã QR Check-in</Text>
+        <Text style={[styles.headerTitle, { color: theme.color.val }]}>
+          Quét mã QR Check-in
+        </Text>
         <View style={styles.headerRightActions}>
           {!isWeb && (
             <>
               <Pressable
                 onPress={() => setTorchEnabled((prev) => !prev)}
-                style={[styles.circleButton, torchEnabled && styles.circleButtonActive]}>
+                style={[
+                  styles.circleButton,
+                  torchEnabled && styles.circleButtonActive,
+                ]}
+              >
                 <Text style={styles.buttonText}>{torchEnabled ? '🔦' : '💡'}</Text>
               </Pressable>
               <Pressable
                 onPress={() => setFacing((curr) => (curr === 'back' ? 'front' : 'back'))}
-                style={styles.circleButton}>
+                style={styles.circleButton}
+              >
                 <Text style={styles.buttonText}>🔄</Text>
               </Pressable>
             </>
@@ -162,7 +216,9 @@ export default function CheckInScreen() {
         {isWeb ? (
           <View style={[styles.fallbackContainer, { backgroundColor: theme.surface.val }]}>
             <Text style={styles.fallbackEmoji}>💻</Text>
-            <Text style={[styles.fallbackTitle, { color: theme.color.val }]}>Chế độ Web / Mô phỏng</Text>
+            <Text style={[styles.fallbackTitle, { color: theme.color.val }]}>
+              Chế độ Web / Mô phỏng
+            </Text>
             <Text style={[styles.fallbackDesc, { color: theme.muted.val }]}>
               Camera quét trực tiếp tối ưu trên thiết bị di động thật. Bạn có thể dùng ô nhập mã hoặc chọn sự kiện thử nghiệm bên dưới để kiểm tra điểm danh ngay!
             </Text>
@@ -170,12 +226,16 @@ export default function CheckInScreen() {
         ) : !permission ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.primary.val} />
-            <Text style={[styles.loadingText, { color: theme.muted.val }]}>Đang kiểm tra quyền camera...</Text>
+            <Text style={[styles.loadingText, { color: theme.muted.val }]}>
+              Đang kiểm tra quyền camera...
+            </Text>
           </View>
         ) : !permission.granted ? (
           <View style={[styles.deniedContainer, { backgroundColor: theme.surface.val }]}>
             <Text style={styles.deniedEmoji}>📷</Text>
-            <Text style={[styles.deniedTitle, { color: theme.color.val }]}>Cần quyền truy cập Camera</Text>
+            <Text style={[styles.deniedTitle, { color: theme.color.val }]}>
+              Cần quyền truy cập Camera
+            </Text>
             <Text style={[styles.deniedDesc, { color: theme.muted.val }]}>
               IUH Event cần quyền camera để quét mã QR điểm danh tại sự kiện. Hãy cho phép để sử dụng tính năng này.
             </Text>
@@ -219,18 +279,39 @@ export default function CheckInScreen() {
       <View style={styles.bottomControls}>
         <Pressable
           style={styles.toggleManualButton}
-          onPress={() => setShowManualSection((prev) => !prev)}>
+          onPress={() => setShowManualSection((prev) => !prev)}
+        >
           <Text style={styles.toggleManualText}>
-            {showManualSection ? '▲ Ẩn nhập mã thủ công' : '⌨️ Hoặc nhập mã thủ công / chọn sự kiện demo'}
+            {showManualSection
+              ? '▲ Ẩn nhập mã thủ công'
+              : '⌨️ Hoặc nhập mã thủ công / chọn sự kiện demo'}
           </Text>
         </Pressable>
 
         {showManualSection && (
-          <ScrollView style={[styles.manualCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.manualLabel, { color: theme.color.val }]}>Nhập mã QR hoặc Event ID:</Text>
+          <ScrollView
+            style={[
+              styles.manualCard,
+              {
+                backgroundColor: theme.surface.val,
+                borderColor: theme.border.val,
+              },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={[styles.manualLabel, { color: theme.color.val }]}>
+              Nhập mã QR hoặc Event ID:
+            </Text>
             <View style={styles.manualInputRow}>
               <TextInput
-                style={[styles.manualInput, { backgroundColor: theme.background.val, borderColor: theme.border.val, color: theme.color.val }]}
+                style={[
+                  styles.manualInput,
+                  {
+                    backgroundColor: theme.background.val,
+                    borderColor: theme.border.val,
+                    color: theme.color.val,
+                  },
+                ]}
                 placeholder="VD: event-1 hoặc student-event:event-1"
                 placeholderTextColor={theme.muted.val}
                 value={manualInput}
@@ -241,11 +322,15 @@ export default function CheckInScreen() {
                 style={styles.manualSubmitButton}
                 onPress={() => {
                   if (manualInput.trim()) {
-                    handleProcessQr(manualInput.trim());
+                    void handleProcessQr(manualInput.trim());
                   } else {
-                    Alert.alert('Vui lòng nhập mã', 'Nhập ID sự kiện (vd: event-1) để kiểm tra.');
+                    Alert.alert(
+                      'Vui lòng nhập mã',
+                      'Nhập ID sự kiện (vd: event-1) để kiểm tra.',
+                    );
                   }
-                }}>
+                }}
+              >
                 <Text style={styles.manualSubmitText}>Check-in</Text>
               </Pressable>
             </View>
@@ -258,7 +343,8 @@ export default function CheckInScreen() {
                   <Pressable
                     key={evt.id}
                     style={[styles.demoItem, isChecked && styles.demoItemChecked]}
-                    onPress={() => handleProcessQr(evt.id)}>
+                    onPress={() => void handleProcessQr(evt.id)}
+                  >
                     <Text style={styles.demoItemTitle} numberOfLines={1}>
                       {evt.title} ({evt.id})
                     </Text>
@@ -291,7 +377,8 @@ export default function CheckInScreen() {
                   styles.resultTitle,
                   scanResult.status === 'success' && styles.resultTitleSuccess,
                   scanResult.status === 'invalid' && styles.resultTitleError,
-                ]}>
+                ]}
+              >
                 {scanResult.status === 'success'
                   ? 'Điểm danh thành công!'
                   : scanResult.status === 'already'
@@ -328,7 +415,8 @@ export default function CheckInScreen() {
                     const id = scanResult.event!.id;
                     resetScanner();
                     router.replace({ pathname: '/events/[id]', params: { id } });
-                  }}>
+                  }}
+                >
                   <Text style={styles.primaryActionText}>Xem chi tiết sự kiện</Text>
                 </Pressable>
               )}
