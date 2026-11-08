@@ -4,25 +4,34 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  Vibration,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { Badge } from '@/components/Badge';
-import { colors, spacing } from '@/constants/app-theme';
+import { AttendancePassModal } from '@/components/AttendancePassModal';
 import { useAppState } from '@/context/AppStateContext';
 import { studentEvents } from '@/data/events';
 import { getEventById, getEventByIdSync } from '@/services/eventService';
 import { ApiError } from '@/services/apiClient';
 import type { StudentEvent } from '@/types/events';
-import { formatEventDate } from '@/utils/date';
 import { useTheme } from '@tamagui/core';
 
 export function parseEventQrCode(raw: string): string | null {
@@ -53,7 +62,7 @@ export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { eventId: preselectedEventId } = useLocalSearchParams<{ eventId?: string }>();
-  const { checkedInEventIds, checkInEvent } = useAppState();
+  const { user, checkedInEventIds, isEventRegistered, registerEvent, checkInEvent } = useAppState();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
@@ -64,20 +73,40 @@ export default function CheckInScreen() {
     Platform.OS === 'web' || Boolean(preselectedEventId),
   );
 
+  const [attendancePassEvent, setAttendancePassEvent] = useState<StudentEvent | null>(null);
+  const [isAlreadyCheckedIn, setIsAlreadyCheckedIn] = useState(false);
+
+  // Unregistered prompt dialog
+  const [unregisteredEvent, setUnregisteredEvent] = useState<{ event: StudentEvent; rawData: string } | null>(null);
+  const [isRegisteringQuick, setIsRegisteringQuick] = useState(false);
+
+  // Error dialog
+  const [errorDialog, setErrorDialog] = useState<string | null>(null);
+
+  const processingRef = useRef(false);
+
+  // Scanning laser animation
+  const laserTranslateY = useSharedValue(0);
+  useEffect(() => {
+    laserTranslateY.value = withRepeat(
+      withSequence(
+        withTiming(210, { duration: 1800, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 1800, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      true,
+    );
+  }, [laserTranslateY]);
+
+  const laserStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: laserTranslateY.value }],
+  }));
+
   useEffect(() => {
     if (preselectedEventId) {
       setManualInput(preselectedEventId);
     }
   }, [preselectedEventId]);
-
-  const [scanResult, setScanResult] = useState<{
-    status: 'success' | 'already' | 'invalid';
-    event?: StudentEvent;
-    scannedCode?: string;
-    message: string;
-  } | null>(null);
-
-  const processingRef = useRef(false);
 
   const handleProcessQr = useCallback(
     async (rawData: string) => {
@@ -85,78 +114,111 @@ export default function CheckInScreen() {
       processingRef.current = true;
       setScanned(true);
 
+      // Light haptic feedback
+      try {
+        Vibration.vibrate(50);
+      } catch {
+        // ignore
+      }
+
       const parsedEventId = parseEventQrCode(rawData);
       let foundEvent = parsedEventId ? getEventByIdSync(parsedEventId) : undefined;
       if (!foundEvent && parsedEventId) {
         try {
           foundEvent = await getEventById(parsedEventId);
         } catch {
-          // Event not found via API
+          // not found via API
         }
       }
 
       if (!foundEvent) {
-        setScanResult({
-          status: 'invalid',
-          scannedCode: rawData,
-          message: `Mã QR "${rawData.slice(0, 30)}${rawData.length > 30 ? '...' : ''}" không khớp với bất kỳ sự kiện nào tại IUH.`,
-        });
+        setErrorDialog(`Mã QR "${rawData.slice(0, 32)}${rawData.length > 32 ? '...' : ''}" không khớp với bất kỳ sự kiện nào tại IUH.`);
         processingRef.current = false;
         return;
       }
 
+      // Case 1: Already checked in
       if (checkedInEventIds.includes(foundEvent.id)) {
-        setScanResult({
-          status: 'already',
-          event: foundEvent,
-          scannedCode: rawData,
-          message: `Bạn đã điểm danh sự kiện "${foundEvent.title}" trước đó rồi!`,
-        });
+        setIsAlreadyCheckedIn(true);
+        setAttendancePassEvent(foundEvent);
         processingRef.current = false;
         return;
       }
 
+      // Case 2: Not registered yet
+      if (!isEventRegistered(foundEvent.id)) {
+        setUnregisteredEvent({ event: foundEvent, rawData });
+        processingRef.current = false;
+        return;
+      }
+
+      // Case 3: Registered -> Proceed to Check in directly
       try {
         const result = await checkInEvent(foundEvent.id, rawData);
         if (result && !result.success) {
-          setScanResult({
-            status: 'invalid',
-            event: foundEvent,
-            scannedCode: rawData,
-            message: result.message || 'Mã QR không hợp lệ hoặc sự kiện đã kết thúc.',
-          });
+          setErrorDialog(result.message || 'Mã QR không hợp lệ hoặc sự kiện đã kết thúc.');
           processingRef.current = false;
           return;
         }
 
-        setScanResult({
-          status: 'success',
-          event: foundEvent,
-          scannedCode: rawData,
-          message: `Điểm danh thành công sự kiện "${foundEvent.title}"! Dữ liệu đã được ghi nhận.`,
-        });
+        // Success vibration
+        try {
+          Vibration.vibrate([0, 70, 40, 70]);
+        } catch {
+          // ignore
+        }
+
+        setIsAlreadyCheckedIn(false);
+        setAttendancePassEvent(foundEvent);
       } catch (error) {
         const message =
           error instanceof ApiError
             ? error.message
             : 'Không thể ghi nhận điểm danh. Hãy thử lại.';
-        setScanResult({
-          status: 'invalid',
-          event: foundEvent,
-          scannedCode: rawData,
-          message,
-        });
+        setErrorDialog(message);
       } finally {
         processingRef.current = false;
       }
     },
-    [checkInEvent, checkedInEventIds],
+    [checkInEvent, checkedInEventIds, isEventRegistered],
   );
+
+  // Quick Register & Check-in Handler
+  const handleQuickRegisterAndCheckIn = async () => {
+    if (!unregisteredEvent) return;
+    setIsRegisteringQuick(true);
+    const { event, rawData } = unregisteredEvent;
+    try {
+      await registerEvent(event.id);
+      const result = await checkInEvent(event.id, rawData);
+      if (result && !result.success) {
+        setErrorDialog(result.message || 'Chưa thể hoàn tất điểm danh.');
+        return;
+      }
+
+      try {
+        Vibration.vibrate([0, 70, 40, 70]);
+      } catch {
+        // ignore
+      }
+
+      setUnregisteredEvent(null);
+      setIsAlreadyCheckedIn(false);
+      setAttendancePassEvent(event);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Có lỗi khi đăng ký nhanh.';
+      setErrorDialog(msg);
+    } finally {
+      setIsRegisteringQuick(false);
+    }
+  };
 
   const resetScanner = () => {
     processingRef.current = false;
-    setScanResult(null);
     setScanned(false);
+    setErrorDialog(null);
+    setUnregisteredEvent(null);
+    setAttendancePassEvent(null);
   };
 
   const isWeb = Platform.OS === 'web';
@@ -166,58 +228,64 @@ export default function CheckInScreen() {
       style={[
         styles.container,
         {
-          backgroundColor: theme.background.val,
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
         },
       ]}
     >
-      {/* Top Header */}
-      <View
-        style={[
-          styles.topBar,
-          {
-            backgroundColor: theme.surface.val,
-            borderBottomColor: theme.border.val,
-          },
-        ]}
-      >
-        <Pressable onPress={() => router.back()} style={styles.circleButton}>
-          <Text style={styles.buttonText}>✕</Text>
+      {/* Top Glassmorphic Navigation Bar */}
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.circleBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Đóng camera"
+        >
+          <Ionicons name="close" size={22} color="#FFFFFF" />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.color.val }]}>
-          Quét mã QR Check-in
-        </Text>
+
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>Quét mã Check-in</Text>
+          <Text style={styles.headerSubtitle}>Điểm danh sự kiện IUH</Text>
+        </View>
+
         <View style={styles.headerRightActions}>
           {!isWeb && (
             <>
               <Pressable
                 onPress={() => setTorchEnabled((prev) => !prev)}
-                style={[
-                  styles.circleButton,
-                  torchEnabled && styles.circleButtonActive,
-                ]}
+                style={[styles.circleBtn, torchEnabled && styles.circleBtnActive]}
+                accessibilityRole="button"
+                accessibilityLabel="Bật đèn pin"
               >
-                <Text style={styles.buttonText}>{torchEnabled ? '🔦' : '💡'}</Text>
+                <Ionicons
+                  name={torchEnabled ? 'flash' : 'flash-outline'}
+                  size={20}
+                  color={torchEnabled ? '#F59E0B' : '#FFFFFF'}
+                />
               </Pressable>
               <Pressable
                 onPress={() => setFacing((curr) => (curr === 'back' ? 'front' : 'back'))}
-                style={styles.circleButton}
+                style={styles.circleBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Đổi camera"
               >
-                <Text style={styles.buttonText}>🔄</Text>
+                <Ionicons name="camera-reverse-outline" size={22} color="#FFFFFF" />
               </Pressable>
             </>
           )}
         </View>
       </View>
 
-      {/* Main Scanner or Permission Area */}
+      {/* Camera Viewfinder Area */}
       <View style={styles.scannerWrapper}>
         {isWeb ? (
           <View style={[styles.fallbackContainer, { backgroundColor: theme.surface.val }]}>
-            <Text style={styles.fallbackEmoji}>💻</Text>
+            <View style={styles.fallbackIconWrap}>
+              <Ionicons name="laptop-outline" size={48} color={theme.primary.val} />
+            </View>
             <Text style={[styles.fallbackTitle, { color: theme.color.val }]}>
-              Chế độ Web / Mô phỏng
+              Chế độ Mô phỏng Web
             </Text>
             <Text style={[styles.fallbackDesc, { color: theme.muted.val }]}>
               Camera quét trực tiếp tối ưu trên thiết bị di động thật. Bạn có thể dùng ô nhập mã hoặc chọn sự kiện thử nghiệm bên dưới để kiểm tra điểm danh ngay!
@@ -225,14 +293,14 @@ export default function CheckInScreen() {
           </View>
         ) : !permission ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.primary.val} />
-            <Text style={[styles.loadingText, { color: theme.muted.val }]}>
-              Đang kiểm tra quyền camera...
-            </Text>
+            <ActivityIndicator size="large" color="#0D6EFD" />
+            <Text style={styles.loadingText}>Đang kiểm tra quyền camera...</Text>
           </View>
         ) : !permission.granted ? (
           <View style={[styles.deniedContainer, { backgroundColor: theme.surface.val }]}>
-            <Text style={styles.deniedEmoji}>📷</Text>
+            <View style={styles.deniedIconWrap}>
+              <Ionicons name="camera-outline" size={48} color="#EF4444" />
+            </View>
             <Text style={[styles.deniedTitle, { color: theme.color.val }]}>
               Cần quyền truy cập Camera
             </Text>
@@ -253,59 +321,69 @@ export default function CheckInScreen() {
               onBarcodeScanned={scanned ? undefined : (res) => handleProcessQr(res.data)}
             />
 
-            {/* Viewfinder Target Overlay */}
+            {/* Dark Mask with Target Window */}
             <View style={styles.overlay}>
               <View style={styles.overlayUnfocused} />
               <View style={styles.overlayCenterRow}>
                 <View style={styles.overlayUnfocused} />
                 <View style={styles.targetFrame}>
+                  {/* Glowing 4 Corner Brackets */}
                   <View style={[styles.corner, styles.cornerTL]} />
                   <View style={[styles.corner, styles.cornerTR]} />
                   <View style={[styles.corner, styles.cornerBL]} />
                   <View style={[styles.corner, styles.cornerBR]} />
-                  <View style={styles.scanLine} />
+
+                  {/* Dynamic Laser Scanning Line */}
+                  <Animated.View style={[styles.laserLineWrap, laserStyle]}>
+                    <LinearGradient
+                      colors={['rgba(56, 189, 248, 0)', '#38BDF8', 'rgba(56, 189, 248, 0)']}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={styles.laserGradient}
+                    />
+                  </Animated.View>
                 </View>
                 <View style={styles.overlayUnfocused} />
               </View>
-              <View style={styles.overlayUnfocused}>
-                <Text style={styles.targetHint}>Đặt mã QR vào giữa khung hình để quét</Text>
+              <View style={styles.overlayBottom}>
+                <View style={styles.hintPill}>
+                  <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.targetHint}>Căn mã QR sự kiện vào giữa khung ngắm</Text>
+                </View>
               </View>
             </View>
           </View>
         )}
       </View>
 
-      {/* Manual / Demo Check-in Trigger */}
-      <View style={styles.bottomControls}>
+      {/* Bottom Manual & Demo Tray */}
+      <View style={styles.bottomTray}>
         <Pressable
-          style={styles.toggleManualButton}
+          style={styles.trayToggleBtn}
           onPress={() => setShowManualSection((prev) => !prev)}
         >
-          <Text style={styles.toggleManualText}>
-            {showManualSection
-              ? '▲ Ẩn nhập mã thủ công'
-              : '⌨️ Hoặc nhập mã thủ công / chọn sự kiện demo'}
+          <Ionicons
+            name={showManualSection ? 'chevron-down' : 'keypad-outline'}
+            size={18}
+            color="#E2E8F0"
+          />
+          <Text style={styles.trayToggleText}>
+            {showManualSection ? 'Ẩn bảng nhập mã thủ công' : 'Nhập mã ID hoặc chọn sự kiện thử nhanh'}
           </Text>
         </Pressable>
 
         {showManualSection && (
           <ScrollView
-            style={[
-              styles.manualCard,
-              {
-                backgroundColor: theme.surface.val,
-                borderColor: theme.border.val,
-              },
-            ]}
+            style={[styles.manualScroll, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.manualLabel, { color: theme.color.val }]}>
               Nhập mã QR hoặc Event ID:
             </Text>
-            <View style={styles.manualInputRow}>
+            <View style={styles.inputRow}>
               <TextInput
                 style={[
-                  styles.manualInput,
+                  styles.textInput,
                   {
                     backgroundColor: theme.background.val,
                     borderColor: theme.border.val,
@@ -319,37 +397,41 @@ export default function CheckInScreen() {
                 autoCapitalize="none"
               />
               <Pressable
-                style={styles.manualSubmitButton}
+                style={[styles.submitBtn, { backgroundColor: theme.primary.val }]}
                 onPress={() => {
                   if (manualInput.trim()) {
                     void handleProcessQr(manualInput.trim());
                   } else {
-                    Alert.alert(
-                      'Vui lòng nhập mã',
-                      'Nhập ID sự kiện (vd: event-1) để kiểm tra.',
-                    );
+                    Alert.alert('Nhập mã sự kiện', 'Vui lòng nhập ID sự kiện để kiểm tra điểm danh.');
                   }
                 }}
               >
-                <Text style={styles.manualSubmitText}>Check-in</Text>
+                <Text style={styles.submitBtnText}>Quét</Text>
               </Pressable>
             </View>
 
-            <Text style={styles.demoPickerLabel}>Sự kiện thử nghiệm nhanh:</Text>
-            <View style={styles.demoList}>
+            <Text style={[styles.quickListTitle, { color: theme.muted.val }]}>SỰ KIỆN THỬ NGHIỆM TỨC THÌ:</Text>
+            <View style={styles.quickList}>
               {studentEvents.slice(0, 4).map((evt) => {
                 const isChecked = checkedInEventIds.includes(evt.id);
                 return (
                   <Pressable
                     key={evt.id}
-                    style={[styles.demoItem, isChecked && styles.demoItemChecked]}
+                    style={[
+                      styles.quickItem,
+                      { backgroundColor: theme.background.val, borderColor: theme.border.val },
+                      isChecked && styles.quickItemChecked,
+                    ]}
                     onPress={() => void handleProcessQr(evt.id)}
                   >
-                    <Text style={styles.demoItemTitle} numberOfLines={1}>
-                      {evt.title} ({evt.id})
-                    </Text>
+                    <View style={styles.quickItemTextWrap}>
+                      <Text style={[styles.quickItemTitle, { color: theme.color.val }]} numberOfLines={1}>
+                        {evt.title}
+                      </Text>
+                      <Text style={[styles.quickItemId, { color: theme.muted.val }]}>ID: {evt.id}</Text>
+                    </View>
                     <Badge
-                      label={isChecked ? 'Đã check-in' : 'Quét thử'}
+                      label={isChecked ? 'Đã điểm danh' : 'Quét thử'}
                       tone={isChecked ? 'success' : 'neutral'}
                     />
                   </Pressable>
@@ -360,117 +442,135 @@ export default function CheckInScreen() {
         )}
       </View>
 
-      {/* Result Modal */}
-      {scanResult && (
-        <View style={styles.resultBackdrop}>
-          <View style={styles.resultCard}>
-            <View style={styles.resultHeader}>
-              <Text style={styles.resultEmoji}>
-                {scanResult.status === 'success'
-                  ? '🎉'
-                  : scanResult.status === 'already'
-                    ? 'ℹ️'
-                    : '⚠️'}
-              </Text>
-              <Text
-                style={[
-                  styles.resultTitle,
-                  scanResult.status === 'success' && styles.resultTitleSuccess,
-                  scanResult.status === 'invalid' && styles.resultTitleError,
-                ]}
-              >
-                {scanResult.status === 'success'
-                  ? 'Điểm danh thành công!'
-                  : scanResult.status === 'already'
-                    ? 'Đã điểm danh trước đó'
-                    : 'Mã QR không hợp lệ'}
-              </Text>
+      {/* Unregistered Prompt Modal */}
+      {unregisteredEvent && (
+        <View style={styles.dialogBackdrop}>
+          <View style={[styles.dialogCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+            <View style={styles.dialogIconWrap}>
+              <Ionicons name="sparkles" size={32} color="#0D6EFD" />
             </View>
+            <Text style={[styles.dialogTitle, { color: theme.color.val }]}>
+              Chưa đăng ký trước sự kiện
+            </Text>
+            <Text style={[styles.dialogDesc, { color: theme.muted.val }]}>
+              Bạn đang quét check-in sự kiện{' '}
+              <Text style={{ fontWeight: '800', color: theme.color.val }}>
+                &ldquo;{unregisteredEvent.event.title}&rdquo;
+              </Text>
+              . Bạn có muốn Đăng ký & Điểm danh ngay tại bàn không?
+            </Text>
 
-            {scanResult.event && (
-              <View style={styles.eventInfoBox}>
-                <Image source={scanResult.event.image} style={styles.eventThumb} />
-                <View style={styles.eventInfoDetails}>
-                  <Badge label={scanResult.event.category} tone="neutral" />
-                  <Text style={styles.eventInfoTitle} numberOfLines={2}>
-                    {scanResult.event.title}
-                  </Text>
-                  <Text style={styles.eventInfoMeta}>
-                    📍 {scanResult.event.location}
-                  </Text>
-                  <Text style={styles.eventInfoMeta}>
-                    🕒 {formatEventDate(scanResult.event.startsAt)}
-                  </Text>
-                </View>
-              </View>
-            )}
+            <View style={styles.dialogActionCol}>
+              <Pressable
+                style={[styles.dialogPrimaryBtn, { backgroundColor: theme.primary.val }]}
+                disabled={isRegisteringQuick}
+                onPress={() => void handleQuickRegisterAndCheckIn()}
+              >
+                {isRegisteringQuick ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                    <Text style={styles.dialogPrimaryBtnText}>Đăng ký & Điểm danh ngay</Text>
+                  </>
+                )}
+              </Pressable>
 
-            <Text style={styles.resultMessage}>{scanResult.message}</Text>
-
-            <View style={styles.resultActions}>
-              {scanResult.event && (
-                <Pressable
-                  style={styles.primaryActionButton}
-                  onPress={() => {
-                    const id = scanResult.event!.id;
-                    resetScanner();
-                    router.replace({ pathname: '/events/[id]', params: { id } });
-                  }}
-                >
-                  <Text style={styles.primaryActionText}>Xem chi tiết sự kiện</Text>
-                </Pressable>
-              )}
-
-              <Pressable style={styles.secondaryActionButton} onPress={resetScanner}>
-                <Text style={styles.secondaryActionText}>
-                  {scanResult.status === 'invalid' ? 'Thử quét lại' : 'Tiếp tục quét'}
-                </Text>
+              <Pressable
+                style={[styles.dialogSecondaryBtn, { borderColor: theme.border.val }]}
+                disabled={isRegisteringQuick}
+                onPress={resetScanner}
+              >
+                <Text style={[styles.dialogSecondaryBtnText, { color: theme.muted.val }]}>Hủy bỏ</Text>
               </Pressable>
             </View>
           </View>
         </View>
       )}
+
+      {/* Error / Invalid QR Dialog */}
+      {errorDialog && (
+        <View style={styles.dialogBackdrop}>
+          <View style={[styles.dialogCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+            <View style={[styles.dialogIconWrap, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="alert-circle" size={34} color="#EF4444" />
+            </View>
+            <Text style={[styles.dialogTitle, { color: theme.color.val }]}>
+              Mã QR không hợp lệ
+            </Text>
+            <Text style={[styles.dialogDesc, { color: theme.muted.val }]}>{errorDialog}</Text>
+            <Pressable
+              style={[styles.dialogPrimaryBtn, { backgroundColor: theme.primary.val }]}
+              onPress={resetScanner}
+            >
+              <Text style={styles.dialogPrimaryBtnText}>Thử quét lại</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* Attendance Pass (Certificate) Modal */}
+      <AttendancePassModal
+        visible={Boolean(attendancePassEvent)}
+        event={attendancePassEvent ?? undefined}
+        user={user}
+        isAlreadyCheckedIn={isAlreadyCheckedIn}
+        onClose={resetScanner}
+        onViewEvent={() => {
+          if (attendancePassEvent) {
+            const eventId = attendancePassEvent.id;
+            resetScanner();
+            router.replace({ pathname: '/events/[id]', params: { id: eventId } });
+          }
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#0F172A',
     flex: 1,
+    backgroundColor: '#0F172A',
   },
   topBar: {
-    alignItems: 'center',
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     zIndex: 10,
+  },
+  circleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleBtnActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  headerTitleWrap: {
+    alignItems: 'center',
+    gap: 2,
   },
   headerTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  headerSubtitle: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
   },
   headerRightActions: {
     flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  circleButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  circleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
+    gap: 10,
   },
   scannerWrapper: {
     flex: 1,
@@ -478,316 +578,295 @@ const styles = StyleSheet.create({
   },
   cameraBox: {
     flex: 1,
+    position: 'relative',
   },
   overlay: {
     ...StyleSheet.absoluteFill,
   },
   overlayUnfocused: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     flex: 1,
-    justifyContent: 'center',
-    padding: spacing.md,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
   },
   overlayCenterRow: {
     flexDirection: 'row',
     height: 250,
   },
+  overlayBottom: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+    paddingTop: 24,
+  },
   targetFrame: {
-    borderColor: 'transparent',
+    width: 250,
     height: 250,
     position: 'relative',
-    width: 250,
+    overflow: 'hidden',
   },
   corner: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
     borderColor: '#38BDF8',
-    height: 28,
-    position: 'absolute',
-    width: 28,
   },
-  cornerTL: {
-    borderLeftWidth: 4,
-    borderTopLeftRadius: 8,
-    borderTopWidth: 4,
-    left: 0,
-    top: 0,
-  },
-  cornerTR: {
-    borderRightWidth: 4,
-    borderTopRightRadius: 8,
-    borderTopWidth: 4,
-    right: 0,
-    top: 0,
-  },
-  cornerBL: {
-    borderBottomLeftRadius: 8,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    bottom: 0,
-    left: 0,
-  },
-  cornerBR: {
-    borderBottomRightRadius: 8,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    bottom: 0,
-    right: 0,
-  },
-  scanLine: {
-    backgroundColor: '#38BDF8',
-    height: 2,
-    position: 'absolute',
-    top: '50%',
+  cornerTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 6 },
+  cornerTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 6 },
+  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 6 },
+  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 6 },
+  laserLineWrap: {
     width: '100%',
+    height: 4,
+    position: 'absolute',
+    top: 15,
+  },
+  laserGradient: {
+    width: '100%',
+    height: '100%',
+  },
+  hintPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   targetHint: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bottomTray: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 10,
+  },
+  trayToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 14,
+  },
+  trayToggleText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  manualScroll: {
+    maxHeight: 250,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  manualLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  textInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 13,
+  },
+  submitBtn: {
+    height: 44,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  quickListTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  quickList: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  quickItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  quickItemChecked: {
+    opacity: 0.65,
+  },
+  quickItemTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  quickItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  quickItemId: {
+    fontSize: 10,
     fontWeight: '600',
+  },
+  fallbackContainer: {
+    flex: 1,
+    margin: 20,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  fallbackIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(13, 110, 253, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  fallbackDesc: {
+    fontSize: 13,
     textAlign: 'center',
+    lineHeight: 20,
   },
   loadingContainer: {
-    alignItems: 'center',
     flex: 1,
-    gap: spacing.md,
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    gap: 12,
   },
   loadingText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
   },
   deniedContainer: {
-    alignItems: 'center',
     flex: 1,
-    gap: spacing.sm,
+    margin: 20,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    gap: 12,
   },
-  deniedEmoji: {
-    fontSize: 50,
+  deniedIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deniedTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '900',
   },
   deniedDesc: {
-    color: '#94A3B8',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
     textAlign: 'center',
+    lineHeight: 20,
   },
   grantButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#0D6EFD',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
     borderRadius: 14,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    marginTop: 6,
   },
   grantButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  fallbackContainer: {
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.xs,
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  fallbackEmoji: {
-    fontSize: 48,
-  },
-  fallbackTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  fallbackDesc: {
-    color: '#94A3B8',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  bottomControls: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '45%',
-    padding: spacing.md,
-  },
-  toggleManualButton: {
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-  },
-  toggleManualText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  manualCard: {
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  manualLabel: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  manualInputRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  manualInput: {
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    color: colors.text,
-    flex: 1,
-    fontSize: 14,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 10,
-  },
-  manualSubmitButton: {
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  manualSubmitText: {
-    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
   },
-  demoPickerLabel: {
-    color: colors.mutedText,
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  demoList: {
-    gap: spacing.xs,
-  },
-  demoItem: {
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: 10,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-  },
-  demoItemChecked: {
-    borderColor: '#86EFAC',
-  },
-  demoItemTitle: {
-    color: colors.text,
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    marginRight: spacing.xs,
-  },
-  resultBackdrop: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  dialogBackdrop: {
     ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
-    padding: spacing.lg,
+    alignItems: 'center',
+    padding: 20,
     zIndex: 100,
   },
-  resultCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    gap: spacing.md,
-    maxWidth: 400,
-    padding: spacing.lg,
+  dialogCard: {
     width: '100%',
-  },
-  resultHeader: {
+    maxWidth: 340,
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 22,
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 14,
   },
-  resultEmoji: {
-    fontSize: 44,
+  dialogIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(13, 110, 253, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  resultTitle: {
-    color: colors.text,
-    fontSize: 20,
+  dialogTitle: {
+    fontSize: 17,
     fontWeight: '900',
     textAlign: 'center',
   },
-  resultTitleSuccess: {
-    color: '#16A34A',
-  },
-  resultTitleError: {
-    color: colors.danger,
-  },
-  eventInfoBox: {
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  eventThumb: {
-    borderRadius: 10,
-    height: 70,
-    width: 70,
-  },
-  eventInfoDetails: {
-    flex: 1,
-    gap: 3,
-  },
-  eventInfoTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  eventInfoMeta: {
-    color: colors.mutedText,
-    fontSize: 11,
-  },
-  resultMessage: {
-    color: colors.mutedText,
-    fontSize: 14,
-    lineHeight: 20,
+  dialogDesc: {
+    fontSize: 13,
     textAlign: 'center',
+    lineHeight: 20,
   },
-  resultActions: {
-    gap: spacing.xs,
+  dialogActionCol: {
+    width: '100%',
+    gap: 10,
+    marginTop: 6,
   },
-  primaryActionButton: {
+  dialogPrimaryBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
     borderRadius: 14,
-    paddingVertical: spacing.md,
+    width: '100%',
   },
-  primaryActionText: {
+  dialogPrimaryBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
-  secondaryActionButton: {
+  dialogSecondaryBtn: {
     alignItems: 'center',
-    backgroundColor: colors.border,
-    borderRadius: 14,
-    paddingVertical: spacing.md,
+    justifyContent: 'center',
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    width: '100%',
   },
-  secondaryActionText: {
-    color: colors.text,
-    fontSize: 14,
+  dialogSecondaryBtnText: {
+    fontSize: 13,
     fontWeight: '700',
   },
 });

@@ -20,6 +20,8 @@ export default function AdminLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="analytics" />
+      <Stack.Screen name="organizers/index" />
       <Stack.Screen name="events/index" />
       <Stack.Screen name="events/new" />
       <Stack.Screen name="events/[id]" />

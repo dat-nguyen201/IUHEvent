@@ -4,7 +4,7 @@ import { ObjectId, type Db, type Filter } from 'mongodb';
 import { conflict, notFound } from '../lib/errors';
 import { createEventSchema, eventStatusSchema, updateEventSchema } from '../lib/validation';
 import { requireAdmin, requireAuth } from '../middleware/auth';
-import { toPublicEvent, type EventDocument } from '../types/domain';
+import { toPublicEvent, type EventDocument, type RegistrationDocument, type ReviewDocument, type UserDocument } from '../types/domain';
 
 function pageNumber(value: unknown, fallback: number, max: number) {
   const number = Number(value);
@@ -39,11 +39,35 @@ export function createAdminEventsRouter(db: Db) {
       ];
     }
 
+    const reviews = db.collection<ReviewDocument>('reviews');
+
     const [total, rows] = await Promise.all([
       events.countDocuments(filter),
       events.find(filter).sort({ startsAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).toArray(),
     ]);
-    res.json({ data: rows.map(toPublicEvent), total, page, pageSize, hasMore: page * pageSize < total });
+
+    const eventIds = rows.map((e) => e.id);
+    const reviewStats = await reviews
+      .aggregate([
+        { $match: { eventId: { $in: eventIds } } },
+        { $group: { _id: '$eventId', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
+      ])
+      .toArray();
+    const statsMap = new Map(
+      reviewStats.map((s) => [s._id, { count: s.count, avgRating: Number(s.avgRating.toFixed(1)) }]),
+    );
+
+    res.json({
+      data: rows.map((r) => ({
+        ...toPublicEvent(r),
+        avgRating: statsMap.get(r.id)?.avgRating ?? null,
+        reviewCount: statsMap.get(r.id)?.count ?? 0,
+      })),
+      total,
+      page,
+      pageSize,
+      hasMore: page * pageSize < total,
+    });
   });
 
   router.post('/', async (req, res) => {
@@ -67,6 +91,69 @@ export function createAdminEventsRouter(db: Db) {
     const event = await events.findOne({ id: req.params.eventId });
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
     res.json({ data: toPublicEvent(event) });
+  });
+
+  router.get('/:eventId/attendance', async (req, res) => {
+    const event = await events.findOne({ id: req.params.eventId });
+    if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
+
+    const registrations = db.collection<RegistrationDocument>('registrations');
+    const users = db.collection<UserDocument>('users');
+
+    const regList = await registrations.find({ eventId: event.id }).toArray();
+    const userIds = regList.map((r) => r.userId);
+    const userList = await users.find({ _id: { $in: userIds } }).toArray();
+    const userMap = new Map(userList.map((u) => [u._id.toHexString(), u]));
+
+    const attendance = regList.map((r) => {
+      const u = userMap.get(r.userId.toHexString());
+      return {
+        studentId: u?.studentId || 'Chưa cập nhật',
+        name: u?.name || 'Sinh viên IUH',
+        email: u?.email || '',
+        major: u?.major || 'Công nghệ Thông tin',
+        status: r.status,
+        registeredAt: r.registeredAt?.toISOString(),
+        checkedInAt: r.checkedInAt?.toISOString() || null,
+      };
+    });
+
+    res.json({
+      event: toPublicEvent(event),
+      data: attendance,
+      total: attendance.length,
+      checkedInTotal: attendance.filter((a) => a.status === 'checked-in').length,
+    });
+  });
+
+  router.get('/:eventId/export-csv', async (req, res) => {
+    const event = await events.findOne({ id: req.params.eventId });
+    if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
+
+    const registrations = db.collection<RegistrationDocument>('registrations');
+    const users = db.collection<UserDocument>('users');
+
+    const regList = await registrations.find({ eventId: event.id }).toArray();
+    const userIds = regList.map((r) => r.userId);
+    const userList = await users.find({ _id: { $in: userIds } }).toArray();
+    const userMap = new Map(userList.map((u) => [u._id.toHexString(), u]));
+
+    const header = '\uFEFFSTT,Mã số sinh viên,Họ và tên,Email,Khoa/Chuyên ngành,Thời gian điểm danh,Trạng thái\n';
+    const rows = regList.map((r, idx) => {
+      const u = userMap.get(r.userId.toHexString());
+      const studentId = u?.studentId || 'Chưa cập nhật';
+      const name = u?.name || 'Sinh viên IUH';
+      const email = u?.email || '';
+      const major = u?.major || 'Công nghệ Thông tin';
+      const time = r.checkedInAt ? new Date(r.checkedInAt).toLocaleString('vi-VN') : 'Chưa điểm danh';
+      const statusText = r.status === 'checked-in' ? 'Đã điểm danh' : 'Đã đăng ký (chưa điểm danh)';
+      return `${idx + 1},"${studentId}","${name}","${email}","${major}","${time}","${statusText}"`;
+    });
+
+    const csvContent = header + rows.join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="attendance-${event.id}.csv"`);
+    res.send(csvContent);
   });
 
   router.patch('/:eventId/status', async (req, res) => {

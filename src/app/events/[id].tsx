@@ -6,6 +6,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -23,6 +24,11 @@ import { ApiError } from "@/services/apiClient";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 
 import { ReminderModal } from "@/components/ReminderModal";
+import { EventQrModal } from "@/components/EventQrModal";
+import { AttendancePassModal } from "@/components/AttendancePassModal";
+import { CampusMapModal } from "@/components/CampusMapModal";
+import { EventReviews } from "@/components/EventReviews";
+import { Ionicons } from "@expo/vector-icons";
 import { useEventReminder } from "@/hooks/use-event-reminder";
 import { useTheme } from "@tamagui/core";
 import type { StudentEvent } from "@/types/events";
@@ -35,8 +41,12 @@ export default function EventDetailScreen() {
   const [isLoading, setIsLoading] = useState(!event);
   const [error, setError] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [showCampusMap, setShowCampusMap] = useState(false);
 
   const {
+    user,
     checkedInEventIds,
     isEventSaved,
     isEventRegistered,
@@ -237,6 +247,18 @@ export default function EventDetailScreen() {
     );
   };
 
+  const handleShareEvent = async () => {
+    if (!event) return;
+    try {
+      await Share.share({
+        title: event.title,
+        message: `📢 [IUH EVENT] Mời bạn cùng tham gia sự kiện:\n🎯 ${event.title}\n📍 Địa điểm: ${event.location}\n🕒 Thời gian: ${formatEventDate(event.startsAt)}\n🏛 Đơn vị tổ chức: ${event.organizer}\n\n👉 Mở app IUHEvent để đăng ký và quét mã check-in nhé!`,
+      });
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <Screen>
       <ScrollView
@@ -270,6 +292,50 @@ export default function EventDetailScreen() {
             },
           ]}
         >
+          {/* Card Top Action Bar with Compact QR & Share Icons */}
+          <View style={styles.infoCardTopBar}>
+            <Text style={[styles.infoCardHeading, { color: theme.color.val }]}>
+              THÔNG TIN CHI TIẾT
+            </Text>
+            <View style={styles.infoCardActions}>
+              <Pressable
+                onPress={() => setShowQrModal(true)}
+                style={[
+                  styles.infoCardActionBtn,
+                  {
+                    backgroundColor: `${theme.primary.val}14`,
+                    borderColor: `${theme.primary.val}35`,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Mã QR Sự kiện"
+              >
+                <Ionicons name="qr-code-outline" size={15} color={theme.primary.val} />
+                <Text style={[styles.infoCardActionBtnText, { color: theme.primary.val }]}>
+                  Mã QR
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => void handleShareEvent()}
+                style={[
+                  styles.infoCardActionBtn,
+                  {
+                    backgroundColor: `${theme.primary.val}14`,
+                    borderColor: `${theme.primary.val}35`,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Chia sẻ sự kiện"
+              >
+                <Ionicons name="share-social-outline" size={15} color={theme.primary.val} />
+                <Text style={[styles.infoCardActionBtnText, { color: theme.primary.val }]}>
+                  Chia sẻ
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           <Text style={[styles.infoLabel, { color: theme.muted.val }]}>
             Thời gian
           </Text>
@@ -279,9 +345,20 @@ export default function EventDetailScreen() {
           <Text style={[styles.infoLabel, { color: theme.muted.val }]}>
             Địa điểm
           </Text>
-          <Text style={[styles.infoValue, { color: theme.color.val }]}>
-            {event.location}
-          </Text>
+          <Pressable
+            onPress={() => setShowCampusMap(true)}
+            style={styles.locationLinkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Xem sơ đồ vị trí IUH"
+          >
+            <Text style={[styles.infoValue, { color: theme.color.val, flex: 1 }]}>
+              {event.location}
+            </Text>
+            <View style={[styles.campusMapBadge, { backgroundColor: `${theme.primary.val}15` }]}>
+              <Ionicons name="map-outline" size={13} color={theme.primary.val} />
+              <Text style={[styles.campusMapBadgeText, { color: theme.primary.val }]}>Sơ đồ</Text>
+            </View>
+          </Pressable>
           <Text style={[styles.infoLabel, { color: theme.muted.val }]}>
             Đơn vị tổ chức
           </Text>
@@ -320,16 +397,27 @@ export default function EventDetailScreen() {
         <View style={styles.actionSection}>
           {/* Registration Button */}
           {checkedIn ? (
-            <View style={styles.checkedInBanner}>
-              <Text style={styles.checkedInIcon}>✅</Text>
-              <View style={styles.checkedInTextCol}>
-                <Text style={styles.checkedInTitle}>
-                  Bạn đã điểm danh sự kiện này
-                </Text>
-                <Text style={styles.checkedInSub}>
-                  Thông tin tham gia đã được ghi nhận vào lịch sử của bạn.
-                </Text>
+            <View style={styles.checkedInWrap}>
+              <View style={styles.checkedInBanner}>
+                <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                <View style={styles.checkedInTextCol}>
+                  <Text style={styles.checkedInTitle}>
+                    Bạn đã điểm danh sự kiện này
+                  </Text>
+                  <Text style={styles.checkedInSub}>
+                    Thông tin tham gia đã được ghi nhận vào lịch sử của bạn.
+                  </Text>
+                </View>
               </View>
+
+              <Pressable
+                onPress={() => setShowPassModal(true)}
+                style={[styles.viewPassBtn, { backgroundColor: theme.primary.val }]}
+                accessibilityRole="button"
+              >
+                <Ionicons name="ribbon-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.viewPassBtnText}>Xem Thẻ Điểm danh điện tử (+5đ ĐRL)</Text>
+              </Pressable>
             </View>
           ) : registered ? (
             <Pressable
@@ -374,7 +462,7 @@ export default function EventDetailScreen() {
             </Pressable>
           )}
 
-          {/* QR Check-in Action */}
+          {/* Check-in QR Scanner Button (When registered & not yet checked-in) */}
           {!checkedIn && (
             <Pressable
               onPress={() => {
@@ -393,17 +481,13 @@ export default function EventDetailScreen() {
               style={[
                 styles.qrCheckInButton,
                 {
-                  backgroundColor: isEventExpired
-                    ? "#94A3B8"
-                    : "#0F172A",
+                  backgroundColor: isEventExpired ? "#94A3B8" : "#0F172A",
                 },
               ]}
             >
-              <Text style={styles.qrButtonIcon}>📷</Text>
+              <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
               <Text style={styles.qrButtonText}>
-                {isEventExpired
-                  ? "Sự kiện đã kết thúc"
-                  : "Quét mã QR Check-in"}
+                {isEventExpired ? "Đã kết thúc" : "Quét mã Check-in"}
               </Text>
             </Pressable>
           )}
@@ -465,6 +549,18 @@ export default function EventDetailScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* Student Reviews & Feedback */}
+        <View style={{ marginTop: spacing.md, gap: 8 }}>
+          <Text style={[styles.sectionHeadingTitle, { color: theme.color.val }]}>
+            Đánh giá từ sinh viên
+          </Text>
+          <EventReviews
+            eventId={event.id}
+            currentUser={user}
+            hasCheckedIn={checkedIn}
+          />
+        </View>
       </ScrollView>
 
       {/* Reminder Options Modal */}
@@ -485,6 +581,29 @@ export default function EventDetailScreen() {
         onCancelReminder={() => {
           removeReminder();
         }}
+      />
+
+      {/* Event QR Display Modal */}
+      <EventQrModal
+        visible={showQrModal}
+        event={event}
+        onClose={() => setShowQrModal(false)}
+      />
+
+      {/* Attendance Pass (Certificate) Modal */}
+      <AttendancePassModal
+        visible={showPassModal}
+        event={event}
+        user={user}
+        isAlreadyCheckedIn={true}
+        onClose={() => setShowPassModal(false)}
+      />
+
+      {/* Campus Map / Location Guide Modal */}
+      <CampusMapModal
+        visible={showCampusMap}
+        locationName={event.location}
+        onClose={() => setShowCampusMap(false)}
       />
     </Screen>
   );
@@ -539,6 +658,38 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.md,
   },
+  infoCardTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.2)",
+    marginBottom: 4,
+  },
+  infoCardHeading: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  infoCardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  infoCardActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  infoCardActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
   infoLabel: {
     color: colors.mutedText,
     fontSize: 13,
@@ -550,6 +701,29 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: "700",
+  },
+  locationLinkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  campusMapBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  campusMapBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  sectionHeadingTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 4,
   },
   statusRow: {
     flexDirection: "row",
@@ -591,6 +765,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  checkedInWrap: {
+    gap: 10,
+  },
   checkedInBanner: {
     alignItems: "center",
     backgroundColor: "#ECFDF5",
@@ -600,6 +777,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     padding: spacing.md,
+  },
+  viewPassBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+  },
+  viewPassBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
   checkedInIcon: {
     fontSize: 24,
@@ -617,6 +807,11 @@ const styles = StyleSheet.create({
     color: "#15803D",
     fontSize: 12,
   },
+  qrRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
   qrCheckInButton: {
     alignItems: "center",
     backgroundColor: "#0F172A",
@@ -624,14 +819,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.xs,
     justifyContent: "center",
-    paddingVertical: spacing.md,
+    height: 50,
+  },
+  showQrButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  showQrButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
   },
   qrButtonIcon: {
     fontSize: 18,
   },
   qrButtonText: {
     color: "#38BDF8",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "900",
   },
   reminderButton: {

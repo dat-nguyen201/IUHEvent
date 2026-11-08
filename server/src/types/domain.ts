@@ -55,6 +55,33 @@ export type SavedEventDocument = {
   savedAt: Date;
 };
 
+export type ReviewDocument = {
+  _id?: ObjectId;
+  eventId: string;
+  userId: ObjectId;
+  userName: string;
+  userStudentId: string;
+  userAvatar?: string;
+  rating: number; // 1 to 5
+  tags: string[];
+  comment: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type NotificationType = 'event' | 'point' | 'system';
+
+export type NotificationDocument = {
+  _id?: ObjectId;
+  userId: ObjectId;
+  title: string;
+  body: string;
+  type: NotificationType;
+  eventId?: string;
+  read: boolean;
+  createdAt: Date;
+};
+
 export type PublicUser = {
   id: string;
   name: string;

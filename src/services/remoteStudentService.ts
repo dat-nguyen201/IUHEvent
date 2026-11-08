@@ -14,6 +14,7 @@ export type RemoteEventsParams = {
   pageSize?: number;
   query?: string;
   category?: EventCategory;
+  organizer?: string;
   upcomingOnly?: boolean;
 };
 
@@ -22,6 +23,7 @@ export async function fetchRemoteEvents({
   pageSize = 10,
   query = '',
   category,
+  organizer,
   upcomingOnly = false,
 }: RemoteEventsParams): Promise<EventPage> {
   const searchParams = new URLSearchParams();
@@ -29,6 +31,7 @@ export async function fetchRemoteEvents({
   searchParams.set('pageSize', String(pageSize));
   if (query.trim()) searchParams.set('query', query.trim());
   if (category) searchParams.set('category', category);
+  if (organizer?.trim()) searchParams.set('organizer', organizer.trim());
   if (upcomingOnly) searchParams.set('upcomingOnly', 'true');
 
   const queryString = searchParams.toString();

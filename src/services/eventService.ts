@@ -16,6 +16,7 @@ export type GetEventsParams = {
   pageSize: number;
   query?: string;
   category?: EventCategory;
+  organizer?: string;
   upcomingOnly?: boolean;
   fail?: boolean;
 };
@@ -70,6 +71,7 @@ export async function getEvents({
   pageSize,
   query = '',
   category,
+  organizer,
   upcomingOnly = false,
   fail = false,
 }: GetEventsParams): Promise<EventPage> {
@@ -79,21 +81,26 @@ export async function getEvents({
   }
 
   if (appMode === 'remote') {
-    return fetchRemoteEvents({ page, pageSize, query, category, upcomingOnly });
+    return fetchRemoteEvents({ page, pageSize, query, category, organizer, upcomingOnly });
   }
 
   const { events, source } = await fetchAllEvents();
 
   const normalizedQuery = query.trim().toLowerCase();
+  const normalizedOrganizer = organizer?.trim().toLowerCase();
   const filteredEvents = events.filter((event) => {
     const matchesQuery =
       normalizedQuery.length === 0 ||
       event.title.toLowerCase().includes(normalizedQuery) ||
-      event.location.toLowerCase().includes(normalizedQuery);
+      event.location.toLowerCase().includes(normalizedQuery) ||
+      (event.organizer && event.organizer.toLowerCase().includes(normalizedQuery));
     const matchesCategory = !category || event.category === category;
+    const matchesOrganizer =
+      !normalizedOrganizer ||
+      (event.organizer && event.organizer.toLowerCase().includes(normalizedOrganizer));
     const matchesUpcoming = !upcomingOnly || isFutureEvent(event.startsAt);
 
-    return matchesQuery && matchesCategory && matchesUpcoming;
+    return matchesQuery && matchesCategory && matchesOrganizer && matchesUpcoming;
   });
 
   const start = (page - 1) * pageSize;

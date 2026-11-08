@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Keyboard,
   Pressable,
   RefreshControl,
@@ -148,6 +149,7 @@ export default function DiscoverScreen() {
     category?: string;
     focusSearch?: string;
     upcomingOnly?: string;
+    organizer?: string;
   }>();
   const validCategory = eventCategories.includes(
     params.category as EventCategory,
@@ -159,6 +161,9 @@ export default function DiscoverScreen() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>(validCategory);
+  const [organizerFilter, setOrganizerFilter] = useState<string | undefined>(
+    params.organizer ? String(params.organizer) : undefined,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -167,6 +172,8 @@ export default function DiscoverScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [searchFocused, setSearchFocused] = useState(false);
   const [retryToken, setRetryToken] = useState(0);
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "this_week" | "this_month">("all");
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const listRef = useRef<FlatList<StudentEvent>>(null);
   const searchInputRef = useRef<{ focus: () => void } | null>(null);
   const selectedCategory = category === allCategories ? undefined : category;
@@ -183,6 +190,12 @@ export default function DiscoverScreen() {
   useEffect(() => {
     setCategory(validCategory);
   }, [validCategory]);
+
+  useEffect(() => {
+    if (params.organizer) {
+      setOrganizerFilter(String(params.organizer));
+    }
+  }, [params.organizer]);
 
   useEffect(() => {
     const shouldFocus = Array.isArray(params.focusSearch)
@@ -244,6 +257,7 @@ export default function DiscoverScreen() {
           pageSize: PAGE_SIZE,
           query: debouncedQuery,
           category: selectedCategory,
+          organizer: organizerFilter,
           upcomingOnly: showUpcomingOnly,
         });
         setEvents(result.items);
@@ -260,7 +274,7 @@ export default function DiscoverScreen() {
         setIsRefreshing(false);
       }
     },
-    [debouncedQuery, selectedCategory, showUpcomingOnly],
+    [debouncedQuery, selectedCategory, organizerFilter, showUpcomingOnly],
   );
 
   useEffect(() => {
@@ -294,6 +308,7 @@ export default function DiscoverScreen() {
         pageSize: PAGE_SIZE,
         query: debouncedQuery,
         category: selectedCategory,
+        organizer: organizerFilter,
         upcomingOnly: showUpcomingOnly,
       });
       setEvents((current) => [...current, ...result.items]);
@@ -312,6 +327,7 @@ export default function DiscoverScreen() {
     isLoadingMore,
     isRefreshing,
     loadMoreError,
+    organizerFilter,
     page,
     selectedCategory,
     showUpcomingOnly,
@@ -327,6 +343,41 @@ export default function DiscoverScreen() {
     if (retryToken > 0) void loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryToken]);
+
+  const displayedEvents = useMemo(() => {
+    if (dateFilter === "all") return events;
+    if (dateFilter === "today") {
+      const now = new Date();
+      return events.filter((ev) => {
+        const d = new Date(ev.startsAt);
+        return (
+          d.getDate() === now.getDate() &&
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear()
+        );
+      });
+    }
+    if (dateFilter === "this_week") {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const next7 = new Date(now.getTime() + 7 * 86400000);
+      return events.filter((ev) => {
+        const d = new Date(ev.startsAt);
+        return d >= now && d <= next7;
+      });
+    }
+    if (dateFilter === "this_month") {
+      const now = new Date();
+      return events.filter((ev) => {
+        const d = new Date(ev.startsAt);
+        return (
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear()
+        );
+      });
+    }
+    return events;
+  }, [events, dateFilter]);
 
   const categories = useMemo<CategoryFilter[]>(
     () => [allCategories, ...eventCategories],
@@ -393,57 +444,174 @@ export default function DiscoverScreen() {
 
       {/* Tiêu đề lớn, thu gọn khi cuộn */}
       <Animated.View style={[styles.hero, heroStyle]}>
-        <Text style={styles.eyebrow}>TÌM HOẠT ĐỘNG MỚI</Text>
-        <Text style={[styles.title, { color: theme.color.val }]}>
-          Khám phá sự kiện
-        </Text>
+        <View style={styles.headerBrandRow}>
+          <Image
+            source={require("@/IMG/logo.png")}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.eyebrow}>TÌM HOẠT ĐỘNG MỚI</Text>
+            <Text style={[styles.title, { color: theme.color.val }]}>
+              Khám phá sự kiện
+            </Text>
+          </View>
+        </View>
       </Animated.View>
 
-      {/* Ô tìm kiếm */}
-      <View
-        style={[
-          styles.searchBox,
-          {
-            backgroundColor: theme.surface.val,
-            borderColor: searchFocused ? theme.primary.val : theme.border.val,
-          },
-        ]}
-      >
-        <Ionicons
-          name="search"
-          size={18}
-          color={searchFocused ? theme.color.val : theme.muted.val}
-        />
-        <TextInput
-          ref={searchInputRef as any}
-          value={query}
-          onChangeText={setQuery}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder="Tìm sự kiện hoặc địa điểm"
-          placeholderTextColor={theme.muted.val}
-          style={[styles.searchInput, { color: theme.color.val }]}
-          returnKeyType="search"
-          onSubmitEditing={Keyboard.dismiss}
-          autoCorrect={false}
-          autoFocus={
-            Array.isArray(params.focusSearch)
-              ? params.focusSearch[0] === "1"
-              : params.focusSearch === "1"
-          }
-        />
-        {isTyping ? (
-          <ActivityIndicator size="small" color={theme.muted.val} />
-        ) : query.length > 0 ? (
-          <Pressable
-            hitSlop={10}
-            onPress={() => setQuery("")}
-            accessibilityLabel="Xoá từ khoá"
-          >
-            <Ionicons name="close-circle" size={18} color={theme.muted.val} />
-          </Pressable>
-        ) : null}
+      {/* Ô tìm kiếm + Lọc ngày + Quét QR Check-in */}
+      <View style={styles.searchRow}>
+        <View
+          style={[
+            styles.searchBox,
+            {
+              backgroundColor: theme.surface.val,
+              borderColor: searchFocused ? theme.primary.val : theme.border.val,
+            },
+          ]}
+        >
+          <Ionicons
+            name="search"
+            size={18}
+            color={searchFocused ? theme.color.val : theme.muted.val}
+          />
+          <TextInput
+            ref={searchInputRef as any}
+            value={query}
+            onChangeText={setQuery}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder="Tìm sự kiện, địa điểm, đơn vị..."
+            placeholderTextColor={theme.muted.val}
+            style={[styles.searchInput, { color: theme.color.val }]}
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
+            autoCorrect={false}
+            autoFocus={
+              Array.isArray(params.focusSearch)
+                ? params.focusSearch[0] === "1"
+                : params.focusSearch === "1"
+            }
+          />
+          {isTyping ? (
+            <ActivityIndicator size="small" color={theme.muted.val} />
+          ) : query.length > 0 ? (
+            <Pressable
+              hitSlop={10}
+              onPress={() => setQuery("")}
+              accessibilityLabel="Xoá từ khoá"
+            >
+              <Ionicons name="close-circle" size={18} color={theme.muted.val} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Compact Calendar Date Filter Button */}
+        <Pressable
+          onPress={() => setShowDatePicker((prev) => !prev)}
+          style={[
+            styles.dateFilterBtn,
+            {
+              backgroundColor:
+                dateFilter !== "all" ? theme.primary.val : theme.surface.val,
+              borderColor:
+                dateFilter !== "all" ? theme.primary.val : theme.border.val,
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Lọc theo ngày"
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={18}
+            color={dateFilter !== "all" ? "#FFFFFF" : theme.color.val}
+          />
+        </Pressable>
+
+        {/* QR Scan Button */}
+        <Pressable
+          onPress={() => router.push("/check-in")}
+          style={[styles.qrScanBtn, { backgroundColor: theme.primary.val }]}
+          accessibilityRole="button"
+          accessibilityLabel="Quét mã QR Check-in"
+        >
+          <Ionicons name="qr-code-outline" size={20} color="#FFFFFF" />
+        </Pressable>
       </View>
+
+      {/* Date Filter Pills (Toggleable) */}
+      {showDatePicker && (
+        <View style={styles.dateFilterRow}>
+          {[
+            { id: "all" as const, label: "Tất cả" },
+            { id: "today" as const, label: "Hôm nay" },
+            { id: "this_week" as const, label: "7 ngày tới" },
+            { id: "this_month" as const, label: "Tháng này" },
+          ].map((item) => {
+            const isSelected = dateFilter === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => setDateFilter(item.id)}
+                style={[
+                  styles.datePill,
+                  {
+                    backgroundColor: isSelected
+                      ? theme.primary.val
+                      : theme.surface.val,
+                    borderColor: isSelected
+                      ? theme.primary.val
+                      : theme.border.val,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.datePillText,
+                    { color: isSelected ? "#FFFFFF" : theme.color.val },
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Organizer active badge */}
+      {organizerFilter ? (
+        <View style={styles.activeOrganizerRow}>
+          <View
+            style={[
+              styles.activeOrganizerChip,
+              {
+                backgroundColor: theme.surface.val,
+                borderColor: theme.primary.val,
+              },
+            ]}
+          >
+            <Ionicons name="business" size={14} color={theme.primary.val} />
+            <Text
+              numberOfLines={1}
+              style={[styles.activeOrganizerText, { color: theme.color.val }]}
+            >
+              Đơn vị: {organizerFilter}
+            </Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setOrganizerFilter(undefined)}
+              accessibilityLabel="Xoá lọc theo đơn vị"
+            >
+              <Ionicons
+                name="close-circle"
+                size={16}
+                color={theme.primary.val}
+              />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* Danh mục */}
       <ScrollView
@@ -466,7 +634,7 @@ export default function DiscoverScreen() {
       {!isLoading && !error ? (
         <Animated.View entering={FadeIn.duration(250)} style={styles.resultRow}>
           <Text style={styles.resultText}>
-            {events.length}
+            {displayedEvents.length}
             {hasMore ? "+" : ""} sự kiện
             {debouncedQuery ? (
               <Text
@@ -495,7 +663,7 @@ export default function DiscoverScreen() {
         <AnimatedFlatList
           ref={listRef}
           style={styles.list}
-          data={events}
+          data={displayedEvents}
           keyExtractor={(event) => event.id}
           renderItem={({ item, index }) => (
             <Animated.View
@@ -577,6 +745,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingBottom: spacing.sm,
   },
+  headerBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+  },
+  headerTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
   eyebrow: {
     color: colors.primary,
     fontSize: 11,
@@ -585,25 +767,85 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "900",
     letterSpacing: -0.6,
   },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
   searchBox: {
+    flex: 1,
     alignItems: "center",
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
-    gap: 10,
-    height: 50,
+    gap: 8,
+    height: 48,
+    paddingHorizontal: 12,
+  },
+  dateFilterBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  qrScanBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0D6EFD",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  dateFilterRow: {
+    flexDirection: "row",
+    gap: 8,
     marginBottom: spacing.sm,
-    paddingHorizontal: 14,
+  },
+  datePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  datePillText: {
+    fontSize: 11,
+    fontWeight: "800",
   },
   searchBoxFocused: {
     backgroundColor: colors.surface,
     borderColor: colors.primary,
+  },
+  activeOrganizerRow: {
+    marginBottom: spacing.xs,
+    flexDirection: "row",
+  },
+  activeOrganizerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    maxWidth: "100%",
+  },
+  activeOrganizerText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    flexShrink: 1,
   },
   searchInput: { color: colors.text, flex: 1, fontSize: 15, height: "100%" },
   categoryScroll: { flexGrow: 0, marginHorizontal: -spacing.md, maxHeight: 44 },

@@ -1,10 +1,10 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useAuth } from "@/context/AuthContext";
 import { colors, spacing } from "@/constants/app-theme";
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@tamagui/core";
 
 export default function IntroScreen() {
@@ -41,8 +41,20 @@ export default function IntroScreen() {
         },
       ]}
     >
-      <View style={[styles.brandMark, { backgroundColor: theme.primary.val }]}>
-        <Text style={styles.brandMarkText}>IUH</Text>
+      <View
+        style={[
+          styles.logoWrap,
+          {
+            backgroundColor: "#FFFFFF",
+            shadowColor: theme.primary.val,
+          },
+        ]}
+      >
+        <Image
+          source={require("@/IMG/logo.png")}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
       </View>
       <Text style={[styles.brand, { color: theme.color.val }]}>IUH Event</Text>
       <Text style={[styles.tagline, { color: theme.muted.val }]}>
@@ -61,15 +73,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
   },
-  brandMark: {
+  logoWrap: {
+    width: 104,
+    height: 104,
+    borderRadius: 28,
     alignItems: "center",
-    backgroundColor: colors.primary,
-    borderRadius: 22,
-    height: 76,
     justifyContent: "center",
-    width: 76,
+    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  brandMarkText: { color: "#FFFFFF", fontSize: 22, fontWeight: "900" },
+  logoImage: {
+    width: 88,
+    height: 88,
+  },
   brand: {
     color: colors.text,
     fontSize: 32,

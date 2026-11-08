@@ -3,6 +3,7 @@ import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -83,7 +84,13 @@ export default function AuthScreen() {
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.brandRow}>
-            <View style={styles.brandMark}><Text style={styles.brandMarkText}>IUH</Text></View>
+            <View style={styles.brandLogoWrap}>
+              <Image
+                source={require('@/IMG/logo.png')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+              />
+            </View>
             <View>
               <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT</Text>
               <Text style={[styles.brandTitle, { color: theme.color.val }]}>Đồng hành sự kiện sinh viên</Text>
@@ -227,8 +234,22 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   scrollContent: { flexGrow: 1, gap: spacing.xl, paddingBottom: spacing.lg },
   brandRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
-  brandMark: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 14, height: 48, justifyContent: 'center', width: 48 },
-  brandMarkText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  brandLogoWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  brandLogo: { width: 42, height: 42 },
   eyebrow: { color: colors.primary, fontSize: 12, fontWeight: '800' },
   brandTitle: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 2 },
   intro: { gap: spacing.xs, marginTop: spacing.md },

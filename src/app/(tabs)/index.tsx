@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   ImageBackground,
@@ -10,8 +10,11 @@ import {
   Text,
   View,
   ActivityIndicator,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -24,6 +27,8 @@ import { StatusMessage } from "@/components/StatusMessage";
 import { colors, spacing } from "@/constants/app-theme";
 import { useAppState } from "@/context/AppStateContext";
 import { eventCategories } from "@/data/events";
+import { organizers, getOrganizerLogo, type Organizer } from "@/data/organizers";
+import { getAllOrganizers } from "@/services/organizerService";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
 import type { StudentEvent } from "@/types/events";
 import { getEvents } from "@/services/eventService";
@@ -31,15 +36,35 @@ import { appMode } from "@/constants/app-mode";
 import { invalidateEventsCache } from "@/services/eventsApi";
 import { ApiError } from "@/services/apiClient";
 import { useTheme } from "@tamagui/core";
+import { useAppTheme } from "@/context/ThemeContext";
 import { getAvatarUri } from "@/services/avatarStorage";
+import { fetchUnreadNotificationCount } from "@/services/notificationService";
+
+export interface RecommendedEvent extends StudentEvent {
+  recommendationReason: string;
+  recommendationIcon: keyof typeof Ionicons.glyphMap;
+  recommendationColor: string;
+  fillPercentage: number;
+  _score?: number;
+}
 
 export default function HomeScreen() {
-  const { user, savedEventIds, checkedInEventIds } = useAppState();
+  const {
+    user,
+    savedEventIds,
+    checkedInEventIds,
+    registeredEventIds,
+    saveEvent,
+    unsaveEvent,
+  } = useAppState();
   const theme = useTheme();
 
   const [upcomingEvents, setUpcomingEvents] = useState<StudentEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<StudentEvent[]>([]);
+  const [organizerList, setOrganizerList] = useState<Organizer[]>(organizers);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,7 +90,9 @@ export default function HomeScreen() {
     setError(null);
     try {
       if (appMode === "remote") invalidateEventsCache();
-      const result = await getEvents({ page: 1, pageSize: 50, upcomingOnly: true });
+      void getAllOrganizers().then(setOrganizerList);
+      const result = await getEvents({ page: 1, pageSize: 100 });
+      setAllEvents(result.items);
       const futureEvents = result.items
         .filter((event) => isFutureEvent(event.startsAt))
         .sort(
@@ -89,10 +116,144 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadHomeData();
+      void fetchUnreadNotificationCount().then(setUnreadNotifCount);
     }, [loadHomeData]),
   );
 
-  const featured = upcomingEvents[0];
+  const realOrganizerCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const ev of allEvents) {
+      if (!ev.organizer) continue;
+      const key = ev.organizer.trim().toLowerCase();
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }, [allEvents]);
+
+  const getRealOrganizerCount = useCallback(
+    (org: Organizer) => {
+      const normName = org.name.toLowerCase().trim();
+      const normShort = org.shortName.toLowerCase().trim();
+      let total = 0;
+      for (const [key, count] of Object.entries(realOrganizerCounts)) {
+        if (
+          key === normName ||
+          key === normShort ||
+          key.includes(normShort) ||
+          normName.includes(key)
+        ) {
+          total += count;
+        }
+      }
+      return total;
+    },
+    [realOrganizerCounts],
+  );
+
+  const featuredEvents = upcomingEvents.slice(0, 5);
+
+  const recommendedEvents: RecommendedEvent[] = useMemo(() => {
+    if (upcomingEvents.length === 0) return [];
+
+    const categoryScores: Record<string, number> = {};
+    const organizerScores: Record<string, number> = {};
+
+    const interactedIds = new Set([
+      ...savedEventIds,
+      ...checkedInEventIds,
+      ...(registeredEventIds || []),
+    ]);
+
+    for (const ev of upcomingEvents) {
+      if (interactedIds.has(ev.id)) {
+        categoryScores[ev.category] = (categoryScores[ev.category] || 0) + 2;
+        if (ev.organizer) {
+          organizerScores[ev.organizer] =
+            (organizerScores[ev.organizer] || 0) + 2;
+        }
+      }
+    }
+
+    const topCategory = Object.entries(categoryScores).sort(
+      (a, b) => b[1] - a[1]
+    )[0]?.[0];
+    const topOrganizer = Object.entries(organizerScores).sort(
+      (a, b) => b[1] - a[1]
+    )[0]?.[0];
+
+    const scored: RecommendedEvent[] = upcomingEvents.map((event) => {
+      let score = 0;
+      let reason = "Dành riêng cho bạn";
+      let icon: keyof typeof Ionicons.glyphMap = "sparkles";
+      let color = "#8B5CF6";
+
+      const fillPercent =
+        event.capacity > 0
+          ? Math.min(
+              100,
+              Math.round(((event.checkedInCount || 0) / event.capacity) * 100)
+            )
+          : 0;
+
+      if (topCategory && event.category === topCategory) {
+        score += 35;
+        reason = "Chủ đề bạn quan tâm";
+        icon = "heart";
+        color = "#E11D48";
+      } else if (topOrganizer && event.organizer === topOrganizer) {
+        score += 30;
+        reason = "Từ đơn vị bạn theo dõi";
+        icon = "business";
+        color = "#0D6EFD";
+      } else if (
+        event.organizer?.toLowerCase().includes("công nghệ thông tin")
+      ) {
+        score += 25;
+        reason = "Gợi ý sinh viên CNTT";
+        icon = "code-slash";
+        color = "#2563EB";
+      } else if (fillPercent >= 70) {
+        score += 20;
+        reason = "Sắp kín chỗ · Đăng ký ngay";
+        icon = "flame";
+        color = "#DC2626";
+      } else if (event.category === "Học thuật") {
+        score += 15;
+        reason = "Nâng cao kỹ năng chuyên ngành";
+        icon = "school";
+        color = "#059669";
+      } else {
+        score += 10;
+        reason = "Sự kiện nổi bật trong tuần";
+        icon = "trending-up";
+        color = "#D97706";
+      }
+
+      if (savedEventIds.includes(event.id)) {
+        score += 15;
+      }
+
+      return {
+        ...event,
+        recommendationReason: reason,
+        recommendationIcon: icon,
+        recommendationColor: color,
+        fillPercentage: fillPercent,
+        _score: score,
+      };
+    });
+
+    scored.sort((a, b) => (b._score || 0) - (a._score || 0));
+    return scored;
+  }, [upcomingEvents, savedEventIds, checkedInEventIds, registeredEventIds]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const ev of upcomingEvents) {
+      counts[ev.category] = (counts[ev.category] || 0) + 1;
+    }
+    return counts;
+  }, [upcomingEvents]);
 
   if (isLoading) {
     return (
@@ -135,75 +296,101 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.header}>
-          <View style={styles.greeting}>
-            <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
-              IUH EVENT
-            </Text>
-            <Text style={[styles.greetingTitle, { color: theme.color.val }]}>
-              Chào {user?.name.split(" ").at(-1) ?? "bạn"}!
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.muted.val }]}>
-              Hôm nay bạn muốn tham gia điều gì?
-            </Text>
+          <View style={styles.headerBrandRow}>
+            <View style={styles.headerLogoWrap}>
+              <Image
+                source={require("@/IMG/logo.png")}
+                style={styles.headerLogo}
+                resizeMode="contain"
+              />
+            </View>
+            <View style={styles.greeting}>
+              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
+                IUH EVENT · ĐH CÔNG NGHIỆP TP.HCM
+              </Text>
+              <Text style={[styles.greetingTitle, { color: theme.color.val }]}>
+                Chào {user?.name.split(" ").at(-1) ?? "bạn"}!
+              </Text>
+              <Text style={[styles.subtitle, { color: theme.muted.val }]}>
+                Hôm nay bạn muốn tham gia điều gì?
+              </Text>
+            </View>
           </View>
-          <Pressable
-            onPress={() => router.push("/(tabs)/profile")}
-            style={styles.avatar}
-          >
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{user?.name.charAt(0) ?? "S"}</Text>
-            )}
-          </Pressable>
+          <View style={styles.headerRightRow}>
+            <Pressable
+              onPress={() => router.push("/notifications" as any)}
+              style={[
+                styles.headerIconBtn,
+                {
+                  backgroundColor: theme.surface.val,
+                  borderColor: theme.border.val,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Thông báo"
+            >
+              <Ionicons name="notifications-outline" size={20} color={theme.color.val} />
+              {unreadNotifCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>
+                    {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push("/(tabs)/profile")}
+              style={styles.avatar}
+            >
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{user?.name.charAt(0) ?? "S"}</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
 
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/(tabs)/discover",
-              params: { focusSearch: "1" },
-            })
-          }
-          style={[
-            styles.searchBox,
-            {
-              backgroundColor: theme.surface.val,
-              borderColor: theme.border.val,
-            },
-          ]}
-        >
-          <Text style={styles.searchIcon}>⌕</Text>
-          <Text style={[styles.searchPlaceholder, { color: theme.muted.val }]}>
-            Tìm sự kiện, địa điểm...
-          </Text>
-          <Text style={styles.searchFilter}>☷</Text>
-        </Pressable>
+        <View style={styles.searchRow}>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/(tabs)/discover",
+                params: { focusSearch: "1" },
+              })
+            }
+            style={[
+              styles.searchBox,
+              {
+                backgroundColor: theme.surface.val,
+                borderColor: theme.border.val,
+              },
+            ]}
+            accessibilityRole="search"
+            accessibilityLabel="Tìm sự kiện, địa điểm"
+          >
+            <Ionicons name="search" size={19} color={theme.primary.val} />
+            <Text style={[styles.searchPlaceholder, { color: theme.muted.val }]}>
+              Tìm sự kiện, địa điểm...
+            </Text>
+            <Ionicons name="options-outline" size={18} color={theme.muted.val} />
+          </Pressable>
 
-        <Pressable
-          onPress={() => router.push("/check-in")}
-          style={[
-            styles.quickQrBanner,
-            {
-              backgroundColor: theme.surface.val,
-              borderColor: theme.border.val,
-              borderWidth: 1,
-            },
-          ]}
-        >
-          <View style={styles.quickQrIconWrap}>
-            <Text style={styles.quickQrIcon}>📷</Text>
-          </View>
-          <View style={styles.quickQrTextWrap}>
-            <Text style={[styles.quickQrTitle, { color: theme.color.val }]}>
-              Quét mã QR Check-in
-            </Text>
-            <Text style={[styles.quickQrSub, { color: theme.muted.val }]}>
-              Điểm danh nhanh sự kiện bạn đang tham gia
-            </Text>
-          </View>
-          <Text style={styles.quickQrChevron}>›</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => router.push("/check-in")}
+            style={[
+              styles.qrScanBtn,
+              {
+                backgroundColor: theme.primary.val,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Quét mã QR Check-in"
+          >
+            <Ionicons name="qr-code-outline" size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
 
         <View style={styles.sectionHeading}>
           <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
@@ -222,8 +409,8 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
-        {featured ? (
-          <FeaturedEvent event={featured} />
+        {featuredEvents.length > 0 ? (
+          <UpcomingEventsCarousel events={featuredEvents} />
         ) : (
           <View
             style={[styles.noEvent, { backgroundColor: theme.surface.val }]}
@@ -300,19 +487,21 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.sectionHeading}>
-          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
-            Danh mục
-          </Text>
-          <Text style={[styles.sectionHint, { color: theme.muted.val }]}>
-            Chọn chủ đề bạn thích
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+              Danh mục sự kiện
+            </Text>
+            <Text style={[styles.sectionHint, { color: theme.muted.val }]}>
+              Khám phá theo lĩnh vực bạn quan tâm
+            </Text>
+          </View>
         </View>
         <View style={styles.categoryGrid}>
-          {eventCategories.map((category, index) => (
-            <CategoryTile
+          {eventCategories.map((category) => (
+            <BentoCategoryCard
               key={category}
               category={category}
-              index={index}
+              eventCount={categoryCounts[category] || 0}
               onPress={() =>
                 router.push({
                   pathname: "/(tabs)/discover",
@@ -323,10 +512,55 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {/* Đơn vị tổ chức tiêu biểu */}
         <View style={styles.sectionHeading}>
-          <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
-            Có thể bạn quan tâm
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+              Đơn vị tổ chức
+            </Text>
+            <Text style={[styles.sectionHint, { color: theme.muted.val }]}>
+              Khoa viện, đoàn thể và CLB năng động tại IUH
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/organizers" as any)}
+          >
+            <Text style={[styles.link, { color: theme.primary.val }]}>
+              Xem tất cả
+            </Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.organizerScroll}
+        >
+          {organizerList.map((org) => (
+            <OrganizerBubble
+              key={org.id}
+              organizer={org}
+              realCount={getRealOrganizerCount(org)}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/discover",
+                  params: { organizer: org.name },
+                })
+              }
+            />
+          ))}
+        </ScrollView>
+
+        {/* Có thể bạn quan tâm (Smart Recommendations + Magazine Cards) */}
+        <View style={styles.sectionHeading}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+              Có thể bạn quan tâm
+            </Text>
+            <Text style={[styles.sectionHint, { color: theme.muted.val }]}>
+              Gợi ý dựa trên ngành học & hoạt động bạn đã lưu
+            </Text>
+          </View>
           <Pressable
             onPress={() =>
               router.push({
@@ -336,139 +570,744 @@ export default function HomeScreen() {
             }
           >
             <Text style={[styles.link, { color: theme.primary.val }]}>
-              Khám phá
+              Tất cả ({recommendedEvents.length})
             </Text>
           </Pressable>
         </View>
-        {upcomingEvents.slice(1).map((event) => (
-          <SmallEvent key={event.id} event={event} />
-        ))}
+
+        {recommendedEvents.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.magazineScroll}
+            snapToInterval={312}
+            decelerationRate="fast"
+          >
+            {recommendedEvents.map((event) => (
+              <MagazineEventCard
+                key={event.id}
+                event={event}
+                isSaved={savedEventIds.includes(event.id)}
+                onToggleSave={() => {
+                  if (savedEventIds.includes(event.id)) {
+                    void unsaveEvent(event.id);
+                  } else {
+                    void saveEvent(event.id);
+                  }
+                }}
+              />
+            ))}
+          </ScrollView>
+        ) : (
+          <View
+            style={[styles.noEvent, { backgroundColor: theme.surface.val }]}
+          >
+            <Text style={[styles.noEventText, { color: theme.muted.val }]}>
+              Chưa có sự kiện đề xuất cho bạn.
+            </Text>
+          </View>
+        )}
         <View style={styles.bottomSpace} />
       </ScrollView>
     </Screen>
   );
 }
 
-const categoryIcons = [
-  "school-outline",
-  "people-outline",
-  "heart-outline",
-  "musical-notes-outline",
-] as const;
-const categoryColors = [
-  { background: "#E8F1FF", icon: "#3478F6" },
-  { background: "#FFF0E6", icon: "#F07836" },
-  { background: "#EAF8F1", icon: "#20A66A" },
-  { background: "#F3ECFF", icon: "#8B5CF6" },
-] as const;
+const CATEGORY_CONFIG: Record<
+  string,
+  {
+    subtitle: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    lightGradients: [string, string];
+    darkGradients: [string, string];
+    accent: string;
+    tag: string;
+  }
+> = {
+  "Học thuật": {
+    subtitle: "Workshop & Nghiên cứu",
+    icon: "school",
+    lightGradients: ["#EFF6FF", "#DBEAFE"],
+    darkGradients: ["#172554", "#1E3A8A"],
+    accent: "#2563EB",
+    tag: "Kỹ năng",
+  },
+  CLB: {
+    subtitle: "Giao lưu & Tuyển quân",
+    icon: "people",
+    lightGradients: ["#FFF7ED", "#FFEDD5"],
+    darkGradients: ["#431407", "#7C2D12"],
+    accent: "#EA580C",
+    tag: "Đồng đội",
+  },
+  "Tình nguyện": {
+    subtitle: "Điểm rèn luyện & Xã hội",
+    icon: "heart",
+    lightGradients: ["#ECFDF5", "#D1FAE5"],
+    darkGradients: ["#064E3B", "#065F46"],
+    accent: "#059669",
+    tag: "Ý nghĩa",
+  },
+  "Giải trí": {
+    subtitle: "Âm nhạc & Thể thao",
+    icon: "musical-notes",
+    lightGradients: ["#FAF5FF", "#F3E8FF"],
+    darkGradients: ["#3B0764", "#581C87"],
+    accent: "#9333EA",
+    tag: "Sôi động",
+  },
+};
 
-function CategoryTile({
+function BentoCategoryCard({
   category,
-  index,
+  eventCount,
   onPress,
 }: {
   category: string;
-  index: number;
+  eventCount: number;
   onPress: () => void;
 }) {
+  const { colorScheme } = useAppTheme();
+  const isDark = colorScheme === "dark";
+  const config = CATEGORY_CONFIG[category] || {
+    subtitle: "Hoạt động sinh viên",
+    icon: "apps" as const,
+    lightGradients: ["#F1F5F9", "#E2E8F0"] as [string, string],
+    darkGradients: ["#1E293B", "#0F172A"] as [string, string],
+    accent: "#0D6EFD",
+    tag: "Khám phá",
+  };
+
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-  const palette = categoryColors[index % categoryColors.length];
+
+  const gradients = isDark ? config.darkGradients : config.lightGradients;
 
   return (
-    <Animated.View style={[styles.categoryTileWrap, animatedStyle]}>
+    <Animated.View style={[styles.bentoCardWrap, animatedStyle]}>
       <Pressable
         onPress={onPress}
         onPressIn={() => {
-          scale.set(withSpring(0.96, { damping: 14, stiffness: 280 }));
+          scale.set(withSpring(0.95, { damping: 14, stiffness: 280 }));
         }}
         onPressOut={() => {
           scale.set(withSpring(1, { damping: 14, stiffness: 280 }));
         }}
-        style={[styles.categoryTile, { backgroundColor: palette.background }]}
+        style={[
+          styles.bentoCard,
+          { borderColor: `${config.accent}35` },
+        ]}
       >
-        <View
-          style={[
-            styles.categoryIconWrap,
-            { backgroundColor: `${palette.icon}18` },
-          ]}
-        >
+        <LinearGradient
+          colors={gradients}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Decorative Watermark Icon in background */}
+        <View style={styles.bentoWatermarkWrap} pointerEvents="none">
           <Ionicons
-            color={palette.icon}
-            name={categoryIcons[index % categoryIcons.length]}
-            size={23}
+            name={config.icon}
+            size={76}
+            color={config.accent}
+            style={styles.bentoWatermark}
           />
         </View>
-        <Text style={styles.categoryLabel}>{category}</Text>
-        <Ionicons color={palette.icon} name="arrow-forward-outline" size={15} />
+
+        {/* Top row: Icon bubble + Event count chip */}
+        <View style={styles.bentoTopRow}>
+          <View
+            style={[
+              styles.bentoIconBubble,
+              {
+                backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#FFFFFF",
+                shadowColor: config.accent,
+              },
+            ]}
+          >
+            <Ionicons name={config.icon} size={20} color={config.accent} />
+          </View>
+          <View
+            style={[
+              styles.bentoCountChip,
+              { backgroundColor: `${config.accent}18` },
+            ]}
+          >
+            <Text style={[styles.bentoCountText, { color: config.accent }]}>
+              {eventCount > 0 ? `${eventCount} sự kiện` : config.tag}
+            </Text>
+          </View>
+        </View>
+
+        {/* Bottom row: Category Name & Subtitle & Mini Action Arrow */}
+        <View style={styles.bentoBottomContent}>
+          <View style={styles.bentoTextWrap}>
+            <Text
+              style={[
+                styles.bentoTitle,
+                { color: isDark ? "#FFFFFF" : "#0F172A" },
+              ]}
+            >
+              {category}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.bentoSubtitle,
+                { color: isDark ? "rgba(255,255,255,0.65)" : "#64748B" },
+              ]}
+            >
+              {config.subtitle}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.bentoArrowWrap,
+              { backgroundColor: `${config.accent}15` },
+            ]}
+          >
+            <Ionicons name="arrow-forward" size={13} color={config.accent} />
+          </View>
+        </View>
       </Pressable>
     </Animated.View>
   );
 }
 
-function FeaturedEvent({ event }: { event: StudentEvent }) {
-  return (
-    <Pressable
-      onPress={() =>
-        router.push({ pathname: "/events/[id]", params: { id: event.id } })
+interface CarouselItem extends StudentEvent {
+  _uniqueKey: string;
+  _realIndex: number;
+}
+
+function UpcomingEventsCarousel({ events }: { events: StudentEvent[] }) {
+  const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const isInteracting = useRef(false);
+  const virtualIndexRef = useRef(1);
+  const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Tạo danh sách mở rộng có clone ở 2 đầu để tạo vòng lặp vô tận mượt mà:
+  // [E_last, E_0, E_1, ..., E_last, E_0]
+  const extendedEvents: CarouselItem[] = useMemo(() => {
+    if (events.length <= 1) {
+      return events.map((e, idx) => ({
+        ...e,
+        _uniqueKey: `single-${e.id}`,
+        _realIndex: idx,
+      }));
+    }
+    const last = events[events.length - 1];
+    const first = events[0];
+    return [
+      {
+        ...last,
+        _uniqueKey: `clone-prev-${last.id}`,
+        _realIndex: events.length - 1,
+      },
+      ...events.map((e, idx) => ({
+        ...e,
+        _uniqueKey: `real-${e.id}-${idx}`,
+        _realIndex: idx,
+      })),
+      {
+        ...first,
+        _uniqueKey: `clone-next-${first.id}`,
+        _realIndex: 0,
+      },
+    ];
+  }, [events]);
+
+  // Khi đo được chiều rộng, cuộn ngay đến vị trí phần tử thật đầu tiên (index 1)
+  useEffect(() => {
+    if (containerWidth > 0 && events.length > 1) {
+      scrollRef.current?.scrollTo({
+        x: virtualIndexRef.current * containerWidth,
+        animated: false,
+      });
+    }
+  }, [containerWidth, events.length]);
+
+  useEffect(() => {
+    return () => {
+      if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, []);
+
+  // Chuyển slide liên tiếp 1 -> 2 -> 3 -> 4 -> 1... hoàn toàn từ trái sang phải
+  useEffect(() => {
+    if (events.length <= 1 || containerWidth <= 0) return;
+
+    const interval = setInterval(() => {
+      if (isInteracting.current) return;
+
+      const nextVirtual = virtualIndexRef.current + 1;
+      virtualIndexRef.current = nextVirtual;
+
+      const nextRealIndex = (nextVirtual - 1) % events.length;
+      setCurrentIndex(nextRealIndex < 0 ? events.length - 1 : nextRealIndex);
+
+      scrollRef.current?.scrollTo({
+        x: nextVirtual * containerWidth,
+        animated: true,
+      });
+
+      // Nếu vừa trượt tới bản sao phần tử đầu tiên ở cuối:
+      if (nextVirtual === extendedEvents.length - 1) {
+        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+        // Chờ hiệu ứng trượt hoàn tất rồi âm thầm nhảy về vị trí thật (index 1)
+        resetTimerRef.current = setTimeout(() => {
+          scrollRef.current?.scrollTo({
+            x: 1 * containerWidth,
+            animated: false,
+          });
+          virtualIndexRef.current = 1;
+        }, 450);
       }
-      style={styles.featuredWrap}
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [events.length, containerWidth, extendedEvents.length]);
+
+  const handleMomentumScrollEnd = (
+    e: NativeSyntheticEvent<NativeScrollEvent>,
+  ) => {
+    if (containerWidth <= 0 || events.length <= 1) return;
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / containerWidth);
+
+    if (index >= extendedEvents.length - 1) {
+      // Người dùng vuốt tới clone cuối -> âm thầm chuyển về index 1 thật
+      scrollRef.current?.scrollTo({
+        x: 1 * containerWidth,
+        animated: false,
+      });
+      virtualIndexRef.current = 1;
+      setCurrentIndex(0);
+    } else if (index <= 0) {
+      // Người dùng vuốt lùi về clone đầu -> âm thầm chuyển về index cuối thật
+      scrollRef.current?.scrollTo({
+        x: events.length * containerWidth,
+        animated: false,
+      });
+      virtualIndexRef.current = events.length;
+      setCurrentIndex(events.length - 1);
+    } else {
+      virtualIndexRef.current = index;
+      setCurrentIndex(index - 1);
+    }
+  };
+
+  if (events.length === 0) return null;
+
+  return (
+    <View
+      style={styles.carouselContainer}
+      onLayout={(e) => {
+        const width = Math.round(e.nativeEvent.layout.width);
+        if (width > 0 && width !== containerWidth) {
+          setContainerWidth(width);
+        }
+      }}
     >
-      <ImageBackground
-        source={event.image}
-        resizeMode="cover"
-        style={styles.featured}
-        imageStyle={styles.featuredImage}
+      {containerWidth > 0 && (
+        <>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            contentOffset={
+              events.length > 1 ? { x: 1 * containerWidth, y: 0 } : undefined
+            }
+            onScrollBeginDrag={() => {
+              isInteracting.current = true;
+              if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+            }}
+            onScrollEndDrag={() => {
+              if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+              resumeTimerRef.current = setTimeout(() => {
+                isInteracting.current = false;
+              }, 3000);
+            }}
+            onMomentumScrollEnd={handleMomentumScrollEnd}
+          >
+            {extendedEvents.map((event) => (
+              <Pressable
+                key={event._uniqueKey}
+                onPress={() =>
+                  router.push({
+                    pathname: "/events/[id]",
+                    params: { id: event.id },
+                  })
+                }
+                style={[styles.carouselSlide, { width: containerWidth }]}
+              >
+                <ImageBackground
+                  source={event.image}
+                  resizeMode="cover"
+                  style={styles.featured}
+                  imageStyle={styles.featuredImage}
+                >
+                  {/* Lớp gradient sang trọng để text luôn nổi bật và sắc nét */}
+                  <LinearGradient
+                    colors={[
+                      "rgba(10, 18, 36, 0.45)",
+                      "rgba(10, 18, 36, 0.15)",
+                      "rgba(10, 18, 36, 0.88)",
+                      "rgba(10, 18, 36, 0.98)",
+                    ]}
+                    locations={[0, 0.35, 0.75, 1]}
+                    style={StyleSheet.absoluteFill}
+                  />
+
+                  {/* Thanh trên: Badge danh mục và số thứ tự slide */}
+                  <View style={styles.slideTopBar}>
+                    <Badge label={event.category} />
+                    {events.length > 1 && (
+                      <View style={styles.slideCounterBadge}>
+                        <Text style={styles.slideCounterText}>
+                          {currentIndex + 1} / {events.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Nội dung sự kiện */}
+                  <View style={styles.featuredContent}>
+                    <Text style={styles.featuredTitle} numberOfLines={2}>
+                      {event.title}
+                    </Text>
+                    <View style={styles.featuredMetaRow}>
+                      <Ionicons
+                        name="calendar-outline"
+                        size={13}
+                        color="#E2E8F0"
+                      />
+                      <Text style={styles.featuredMetaText}>
+                        {formatEventDate(event.startsAt)}
+                      </Text>
+                      <Text style={styles.featuredMetaDot}>·</Text>
+                      <Ionicons
+                        name="location-outline"
+                        size={13}
+                        color="#E2E8F0"
+                      />
+                      <Text style={styles.featuredMetaText} numberOfLines={1}>
+                        {event.location}
+                      </Text>
+                    </View>
+                    <View style={styles.featuredAction}>
+                      <Text style={styles.featuredActionText}>
+                        Xem chi tiết
+                      </Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={12}
+                        color={colors.primary}
+                      />
+                    </View>
+                  </View>
+                </ImageBackground>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* Dải chấm chỉ số (dots pagination) */}
+          {events.length > 1 && (
+            <View style={styles.paginationDots}>
+              {events.map((_, i) => (
+                <Pressable
+                  key={i}
+                  hitSlop={8}
+                  onPress={() => {
+                    const targetVirtual = i + 1;
+                    virtualIndexRef.current = targetVirtual;
+                    setCurrentIndex(i);
+                    scrollRef.current?.scrollTo({
+                      x: targetVirtual * containerWidth,
+                      animated: true,
+                    });
+                  }}
+                  style={[
+                    styles.dot,
+                    i === currentIndex ? styles.dotActive : styles.dotInactive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+
+function OrganizerBubble({
+  organizer,
+  realCount,
+  onPress,
+}: {
+  organizer: Organizer;
+  realCount?: number;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const countToDisplay = realCount !== undefined ? realCount : organizer.eventCount;
+
+  return (
+    <Pressable onPress={onPress} style={styles.organizerBubble}>
+      <View
+        style={[
+          styles.organizerAvatarRing,
+          { borderColor: organizer.color || theme.primary.val },
+        ]}
       >
-        <View style={styles.featuredShade} />
-        <View style={styles.featuredContent}>
-          <Badge label={event.category} />
-          <Text style={styles.featuredTitle} numberOfLines={2}>
-            {event.title}
-          </Text>
-          <Text style={styles.featuredMeta}>
-            {formatEventDate(event.startsAt)} · {event.location}
-          </Text>
-          <View style={styles.featuredAction}>
-            <Text style={styles.featuredActionText}>Xem chi tiết ›</Text>
+        <Image
+          source={organizer.logo}
+          style={styles.organizerAvatar}
+          resizeMode="contain"
+        />
+        {organizer.isVerified ? (
+          <View style={styles.organizerCheckWrap}>
+            <Ionicons name="checkmark-circle" size={15} color="#0D6EFD" />
           </View>
-        </View>
-      </ImageBackground>
+        ) : null}
+      </View>
+      <Text
+        numberOfLines={2}
+        style={[styles.organizerName, { color: theme.color.val }]}
+      >
+        {organizer.shortName}
+      </Text>
+      <View
+        style={[
+          styles.organizerEventCountPill,
+          { backgroundColor: theme.surface.val, borderColor: theme.border.val },
+        ]}
+      >
+        <Text
+          style={[styles.organizerEventCountText, { color: theme.muted.val }]}
+        >
+          {countToDisplay} sự kiện
+        </Text>
+      </View>
     </Pressable>
   );
 }
 
-function SmallEvent({ event }: { event: StudentEvent }) {
+function MagazineEventCard({
+  event,
+  isSaved,
+  onToggleSave,
+}: {
+  event: RecommendedEvent;
+  isSaved: boolean;
+  onToggleSave: () => void;
+}) {
   const theme = useTheme();
+  const dateObj = new Date(event.startsAt);
+  const dayStr = isNaN(dateObj.getDate())
+    ? "15"
+    : String(dateObj.getDate()).padStart(2, "0");
+  const monthStr = isNaN(dateObj.getMonth())
+    ? "Thg 11"
+    : `Thg ${dateObj.getMonth() + 1}`;
+  const timeStr = isNaN(dateObj.getHours())
+    ? "08:30"
+    : `${String(dateObj.getHours()).padStart(2, "0")}:${String(
+        dateObj.getMinutes(),
+      ).padStart(2, "0")}`;
+
   return (
     <Pressable
       onPress={() =>
         router.push({ pathname: "/events/[id]", params: { id: event.id } })
       }
-      style={styles.smallEvent}
+      style={[
+        styles.magazineCard,
+        {
+          backgroundColor: theme.surface.val,
+          borderColor: theme.border.val,
+        },
+      ]}
     >
-      <Image
-        source={event.image}
-        resizeMode="cover"
-        style={styles.smallImage}
-      />
-      <View style={styles.smallCopy}>
-        <Text style={[styles.smallCategory, { color: theme.primary.val }]}>
-          {event.category}
-        </Text>
+      <View style={styles.magazineCoverWrap}>
+        <Image
+          source={event.image}
+          style={styles.magazineCover}
+          resizeMode="cover"
+        />
+        <LinearGradient
+          colors={[
+            "rgba(15, 23, 42, 0.65)",
+            "transparent",
+            "rgba(15, 23, 42, 0.88)",
+          ]}
+          locations={[0, 0.42, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Top Floating Row */}
+        <View style={styles.magazineTopBar}>
+          <View
+            style={[
+              styles.magazineReasonBadge,
+              {
+                backgroundColor: "rgba(15, 23, 42, 0.8)",
+                borderColor: `${event.recommendationColor}88`,
+              },
+            ]}
+          >
+            <Ionicons
+              name={event.recommendationIcon}
+              size={12}
+              color={event.recommendationColor}
+            />
+            <Text
+              style={[
+                styles.magazineReasonText,
+                { color: event.recommendationColor },
+              ]}
+            >
+              {event.recommendationReason}
+            </Text>
+          </View>
+
+          <Pressable
+            hitSlop={8}
+            onPress={(e) => {
+              e.stopPropagation();
+              onToggleSave();
+            }}
+            style={[
+              styles.magazineSaveBtn,
+              isSaved && { backgroundColor: "#FFB800" },
+            ]}
+          >
+            <Ionicons
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={15}
+              color="#FFFFFF"
+            />
+          </Pressable>
+        </View>
+
+        {/* Floating Date Badge */}
+        <View style={styles.magazineDateBadge}>
+          <Text style={styles.magazineDateDay}>{dayStr}</Text>
+          <Text style={styles.magazineDateMonth}>{monthStr}</Text>
+        </View>
+      </View>
+
+      {/* Magazine Body */}
+      <View style={styles.magazineBody}>
+        {/* Organizer & Category */}
+        <View style={styles.magazineOrgRow}>
+          <Image
+            source={getOrganizerLogo(event.organizer)}
+            style={styles.magazineOrgLogo}
+            resizeMode="contain"
+          />
+          <Text
+            numberOfLines={1}
+            style={[styles.magazineOrgName, { color: theme.color.val }]}
+          >
+            {event.organizer}
+          </Text>
+          <Ionicons name="checkmark-circle" size={13} color="#0D6EFD" />
+          <View style={styles.magazineCatPill}>
+            <Text style={styles.magazineCatPillText}>{event.category}</Text>
+          </View>
+        </View>
+
+        {/* Title */}
         <Text
-          style={[styles.smallTitle, { color: theme.color.val }]}
           numberOfLines={2}
+          style={[styles.magazineTitle, { color: theme.color.val }]}
         >
           {event.title}
         </Text>
-        <Text style={[styles.smallMeta, { color: theme.muted.val }]}>
-          {formatEventDate(event.startsAt)} · {event.location}
-        </Text>
+
+        {/* Location & Time */}
+        <View style={styles.magazineMetaRow}>
+          <View style={styles.magazineMetaItem}>
+            <Ionicons
+              name="location-outline"
+              size={13}
+              color={theme.muted.val}
+            />
+            <Text
+              numberOfLines={1}
+              style={[styles.magazineMetaText, { color: theme.muted.val }]}
+            >
+              {event.location}
+            </Text>
+          </View>
+          <View style={styles.magazineMetaItem}>
+            <Ionicons name="time-outline" size={13} color={theme.muted.val} />
+            <Text style={[styles.magazineMetaText, { color: theme.muted.val }]}>
+              {timeStr}
+            </Text>
+          </View>
+        </View>
+
+        {/* Capacity Progress Bar */}
+        <View style={styles.magazineCapacityWrap}>
+          <View
+            style={[
+              styles.magazineCapacityTrack,
+              { backgroundColor: theme.border.val },
+            ]}
+          >
+            <View
+              style={[
+                styles.magazineCapacityBar,
+                {
+                  width: `${event.fillPercentage}%`,
+                  backgroundColor:
+                    event.fillPercentage >= 85
+                      ? "#DC3545"
+                      : event.fillPercentage >= 60
+                        ? "#FD7E14"
+                        : "#198754",
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.magazineCapacityInfo}>
+            <Text
+              style={[
+                styles.magazineCapacityText,
+                { color: theme.muted.val },
+              ]}
+            >
+              {event.checkedInCount}/{event.capacity} check-in ({event.fillPercentage}%)
+            </Text>
+            <View style={styles.magazineActionRow}>
+              <Text
+                style={[
+                  styles.magazineActionText,
+                  { color: theme.primary.val },
+                ]}
+              >
+                Xem chi tiết
+              </Text>
+              <Ionicons
+                name="arrow-forward"
+                size={12}
+                color={theme.primary.val}
+              />
+            </View>
+          </View>
+        </View>
       </View>
-      <Text style={[styles.chevron, { color: theme.muted.val }]}>›</Text>
     </Pressable>
   );
 }
@@ -480,6 +1319,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  headerBrandRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginRight: 8,
+  },
+  headerLogoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerLogo: {
+    width: 36,
+    height: 36,
   },
   greeting: { flex: 1, gap: 3 },
   eyebrow: { color: colors.primary, fontSize: 11, fontWeight: "900" },
@@ -495,20 +1360,70 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: "#9A4D19", fontSize: 19, fontWeight: "900" },
   avatarImage: { borderRadius: 22, height: 44, width: 44 },
+  headerRightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  bellBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    backgroundColor: "#EF4444",
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  bellBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   searchBox: {
+    flex: 1,
     alignItems: "center",
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
-    gap: spacing.sm,
-    minHeight: 50,
-    paddingHorizontal: spacing.md,
+    gap: 10,
+    minHeight: 48,
+    height: 48,
+    paddingHorizontal: 14,
   },
-  searchIcon: { color: colors.primary, fontSize: 23, lineHeight: 26 },
   searchPlaceholder: { color: colors.mutedText, flex: 1, fontSize: 14 },
-  searchFilter: { color: colors.mutedText, fontSize: 20 },
+  qrScanBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#0D6EFD",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   sectionHeading: {
     alignItems: "baseline",
     flexDirection: "row",
@@ -517,6 +1432,60 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   sectionHint: { color: colors.mutedText, fontSize: 12 },
   link: { color: colors.primary, fontSize: 13, fontWeight: "800" },
+  carouselContainer: {
+    borderRadius: 18,
+    overflow: "hidden",
+    minHeight: 220,
+    position: "relative",
+  },
+  carouselSlide: {
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  slideTopBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 2,
+  },
+  slideCounterBadge: {
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  slideCounterText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  paginationDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    position: "absolute",
+    bottom: 10,
+    left: 0,
+    right: 0,
+    zIndex: 3,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    width: 20,
+    backgroundColor: "#FFFFFF",
+  },
+  dotInactive: {
+    width: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.45)",
+  },
   featuredWrap: { borderRadius: 18, overflow: "hidden" },
   featured: { justifyContent: "flex-end", minHeight: 220 },
   featuredImage: { borderRadius: 18 },
@@ -528,6 +1497,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,
     padding: spacing.md,
+    paddingBottom: 26,
   },
   featuredTitle: {
     color: "#FFFFFF",
@@ -536,12 +1506,31 @@ const styles = StyleSheet.create({
     lineHeight: 27,
   },
   featuredMeta: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  featuredMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexWrap: "nowrap",
+  },
+  featuredMetaText: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  featuredMetaDot: {
+    color: "#E2E8F0",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   featuredAction: {
     alignSelf: "flex-end",
     backgroundColor: "#FFFFFF",
     borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: 5,
   },
   featuredActionText: {
     color: colors.primary,
@@ -568,25 +1557,301 @@ const styles = StyleSheet.create({
   statValue: { color: colors.text, fontSize: 19, fontWeight: "900" },
   statLabel: { color: colors.mutedText, fontSize: 11 },
   statDivider: { backgroundColor: colors.border, height: 32, width: 1 },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  categoryTileWrap: { flexBasis: "47%", flexGrow: 1 },
-  categoryTile: {
-    alignItems: "center",
-    borderRadius: 20,
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  bentoCardWrap: { flexBasis: "47%", flexGrow: 1 },
+  bentoCard: {
+    borderRadius: 22,
+    padding: 14,
+    minHeight: 126,
+    justifyContent: "space-between",
+    borderWidth: 1.2,
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  bentoWatermarkWrap: {
+    position: "absolute",
+    right: -12,
+    bottom: -14,
+    opacity: 0.14,
+    transform: [{ rotate: "-12deg" }],
+  },
+  bentoWatermark: {},
+  bentoTopRow: {
     flexDirection: "row",
-    gap: spacing.sm,
-    minHeight: 82,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  categoryIconWrap: {
+    justifyContent: "space-between",
     alignItems: "center",
-    borderRadius: 15,
-    height: 46,
-    justifyContent: "center",
-    width: 46,
   },
-  categoryLabel: { color: "#172033", flex: 1, fontSize: 12, fontWeight: "900" },
+  bentoIconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bentoCountChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  bentoCountText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  bentoBottomContent: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  bentoTextWrap: {
+    flex: 1,
+    marginRight: 6,
+  },
+  bentoTitle: {
+    fontSize: 15.5,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+  },
+  bentoSubtitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  bentoArrowWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Organizers showcase
+  organizerScroll: {
+    gap: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  organizerBubble: {
+    alignItems: "center",
+    width: 88,
+    gap: 6,
+  },
+  organizerAvatarRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2.5,
+    padding: 3,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  organizerAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  organizerCheckWrap: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+  },
+  organizerName: {
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 15,
+  },
+  organizerEventCountPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  organizerEventCountText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
+  // Magazine cards for "Có thể bạn quan tâm"
+  magazineScroll: {
+    gap: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  magazineCard: {
+    width: 300,
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  magazineCoverWrap: {
+    width: "100%",
+    height: 165,
+    position: "relative",
+  },
+  magazineCover: {
+    width: "100%",
+    height: "100%",
+  },
+  magazineTopBar: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    right: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 2,
+  },
+  magazineReasonBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  magazineReasonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  magazineSaveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  magazineDateBadge: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+  },
+  magazineDateDay: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 16,
+  },
+  magazineDateMonth: {
+    color: "#E2E8F0",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  magazineBody: {
+    padding: 14,
+    gap: 8,
+  },
+  magazineOrgRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  magazineOrgLogo: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#F8F9FA",
+  },
+  magazineOrgName: {
+    fontSize: 12,
+    fontWeight: "700",
+    flex: 1,
+  },
+  magazineCatPill: {
+    backgroundColor: "rgba(13, 110, 253, 0.1)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  magazineCatPillText: {
+    color: "#0D6EFD",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  magazineTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 21,
+  },
+  magazineMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 2,
+  },
+  magazineMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 1,
+  },
+  magazineMetaText: {
+    fontSize: 12,
+  },
+  magazineCapacityWrap: {
+    marginTop: 4,
+    gap: 5,
+  },
+  magazineCapacityTrack: {
+    height: 5,
+    borderRadius: 2.5,
+    overflow: "hidden",
+  },
+  magazineCapacityBar: {
+    height: "100%",
+    borderRadius: 2.5,
+  },
+  magazineCapacityInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  magazineCapacityText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  magazineActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  magazineActionText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
   smallEvent: {
     alignItems: "center",
     backgroundColor: colors.surface,
@@ -609,41 +1874,4 @@ const styles = StyleSheet.create({
   smallMeta: { color: colors.mutedText, fontSize: 11 },
   chevron: { color: colors.mutedText, fontSize: 22 },
   bottomSpace: { height: spacing.xs },
-  quickQrBanner: {
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 16,
-    flexDirection: "row",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  quickQrIconWrap: {
-    alignItems: "center",
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
-    borderRadius: 12,
-    height: 44,
-    justifyContent: "center",
-    width: 44,
-  },
-  quickQrIcon: {
-    fontSize: 22,
-  },
-  quickQrTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  quickQrTitle: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  quickQrSub: {
-    color: "#94A3B8",
-    fontSize: 12,
-  },
-  quickQrChevron: {
-    color: "#38BDF8",
-    fontSize: 22,
-    fontWeight: "800",
-  },
 });

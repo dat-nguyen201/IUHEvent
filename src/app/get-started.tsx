@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +33,10 @@ export default function GetStartedScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
         <ImageBackground source={studentEvents[0].image} resizeMode="cover" imageStyle={styles.heroImage} style={styles.hero}>
           <View style={styles.heroTint} />
-          <View style={styles.brandPill}><Text style={styles.brandPillText}>IUH EVENT · XIN CHÀO {user?.name.split(' ')[0]?.toUpperCase()}</Text></View>
+          <View style={styles.brandPill}>
+            <Image source={require('@/IMG/logo.png')} style={styles.pillLogo} resizeMode="contain" />
+            <Text style={styles.brandPillText}>IUH EVENT · XIN CHÀO {user?.name.split(' ')[0]?.toUpperCase()}</Text>
+          </View>
         </ImageBackground>
 
       <View style={styles.content}>
@@ -79,7 +82,8 @@ const styles = StyleSheet.create({
   hero: { borderRadius: 20, minHeight: 230, overflow: 'hidden' },
   heroImage: { borderRadius: 20 },
   heroTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(17, 24, 39, 0.16)' },
-  brandPill: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, margin: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  brandPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 999, margin: spacing.md, paddingHorizontal: 10, paddingVertical: 5 },
+  pillLogo: { width: 18, height: 18, borderRadius: 999 },
   brandPillText: { color: colors.primary, fontSize: 11, fontWeight: '900' },
   content: { gap: spacing.md, paddingTop: spacing.lg },
   stepRow: { flexDirection: 'row', gap: 6 },

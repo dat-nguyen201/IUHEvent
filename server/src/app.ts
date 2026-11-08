@@ -6,11 +6,13 @@ import type { Db } from 'mongodb';
 
 import { HttpError } from './lib/errors';
 import { errorHandler } from './middleware/errors';
+import { createAdminAnalyticsRouter } from './routes/admin-analytics';
 import { createAdminEventsRouter } from './routes/admin-events';
 import { createAdminUsersRouter } from './routes/admin-users';
 import { createAuthRouter } from './routes/auth';
 import { createEventsRouter } from './routes/events';
 import { createMeRouter } from './routes/me';
+import { createNotificationsRouter } from './routes/notifications';
 
 const defaultOrigins = ['http://localhost:8081', 'http://localhost:8084', 'http://127.0.0.1:8081', 'http://127.0.0.1:8084'];
 
@@ -23,7 +25,13 @@ export function createApp(db: Db) {
 
   app.set('trust proxy', 1);
   app.use(helmet());
-  app.use(rateLimit({ windowMs: 60_000, limit: 240, standardHeaders: 'draft-8', legacyHeaders: false }));
+  app.use(rateLimit({
+    windowMs: 60_000,
+    limit: 600, // Tăng limit lên 600 req/min để thoải mái phát triển & reload
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { code: 'TOO_MANY_REQUESTS', message: 'Bạn đang thao tác quá nhanh. Hãy thử lại sau 1 phút.' },
+  }));
   app.use(cors({
     origin(origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -47,8 +55,10 @@ export function createApp(db: Db) {
   app.use('/api/auth', createAuthRouter(db));
   app.use('/api/events', createEventsRouter(db));
   app.use('/api/me', createMeRouter(db));
+  app.use('/api/notifications', createNotificationsRouter(db));
   app.use('/api/admin/events', createAdminEventsRouter(db));
   app.use('/api/admin/users', createAdminUsersRouter(db));
+  app.use('/api/admin/analytics', createAdminAnalyticsRouter(db));
 
   app.use((_req, res) => {
     res.status(404).json({ code: 'ROUTE_NOT_FOUND', message: 'Không tìm thấy API.' });

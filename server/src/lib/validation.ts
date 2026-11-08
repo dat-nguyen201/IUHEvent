@@ -54,3 +54,9 @@ export const updateEventSchema = z.object({
 export const eventStatusSchema = z.object({ status: z.enum(['draft', 'published', 'archived']) }).strict();
 export const userStatusSchema = z.object({ status: z.enum(['active', 'suspended']) }).strict();
 export const checkInSchema = z.object({ qrValue: z.string().trim().min(1).max(500) }).strict();
+
+export const reviewSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  tags: z.array(z.string().trim().max(50)).default([]),
+  comment: z.string().trim().max(1000).default(''),
+}).strict();

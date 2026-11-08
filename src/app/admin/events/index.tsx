@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@tamagui/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, RefreshControl, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AdminButton, AdminConfirmDialog, AdminNotice, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminWidgets';
+import { AdminEventReviewsModal } from '@/components/admin/AdminEventReviewsModal';
 import { Screen } from '@/components/Screen';
-import { getAdminEventError, listAdminEvents, setAdminEventStatus } from '@/services/adminEventService';
+import { generateAttendanceCsv, getAdminEventError, getEventAttendance, listAdminEvents, setAdminEventStatus } from '@/services/adminEventService';
 import type { AdminEvent, AdminEventStatus } from '@/types/admin-events';
 import { formatEventDate } from '@/utils/date';
 
@@ -40,6 +41,7 @@ export default function AdminEventsScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState<PendingChange | null>(null);
+  const [selectedReviewEvent, setSelectedReviewEvent] = useState<AdminEvent | null>(null);
   const [busy, setBusy] = useState(false);
   const requestIdRef = useRef(0);
 
@@ -107,6 +109,56 @@ export default function AdminEventsScreen() {
       ? `Sự kiện “${pending.event.title}” sẽ hiển thị ở Trang chủ và Khám phá.`
       : pending ? `Sự kiện “${pending.event.title}” sẽ tạm ẩn khỏi danh sách công khai.` : '';
 
+  const handleExportAttendance = async (event: AdminEvent) => {
+    try {
+      const result = await getEventAttendance(event.id);
+      if (result.data.length === 0) {
+        Alert.alert(
+          'Chưa có dữ liệu sinh viên',
+          `Sự kiện “${event.title}” hiện chưa có sinh viên nào đăng ký hoặc điểm danh.\n\nBạn có muốn xuất file mẫu điểm danh (Template) để kiểm tra định dạng nộp P.CTSV không?`,
+          [
+            { text: 'Đóng', style: 'cancel' },
+            {
+              text: 'Xuất file mẫu',
+              onPress: async () => {
+                const sampleRows = [
+                  {
+                    studentId: '21088888',
+                    name: 'Nguyễn Văn Minh',
+                    email: 'minh.nguyen@iuh.edu.vn',
+                    major: 'Công nghệ Thông tin',
+                    status: 'checked-in',
+                    checkedInAt: new Date().toISOString(),
+                  },
+                  {
+                    studentId: '21099999',
+                    name: 'Lê Thị Thu Hằng',
+                    email: 'hang.le@iuh.edu.vn',
+                    major: 'Quản trị Kinh doanh',
+                    status: 'registered',
+                  },
+                ];
+                const csv = generateAttendanceCsv(event.title, sampleRows);
+                await Share.share({
+                  title: `Mẫu danh sách điểm danh - ${event.title}`,
+                  message: csv,
+                });
+              },
+            },
+          ],
+        );
+        return;
+      }
+      const csv = generateAttendanceCsv(event.title, result.data);
+      await Share.share({
+        title: `Danh sách điểm danh - ${event.title}`,
+        message: csv,
+      });
+    } catch (e) {
+      Alert.alert('Lỗi xuất dữ liệu', e instanceof Error ? e.message : 'Không thể lấy danh sách điểm danh.');
+    }
+  };
+
   const renderItem = ({ item }: { item: AdminEvent }) => (
     <AdminPanel>
       <View style={styles.cardHeader}>
@@ -116,12 +168,39 @@ export default function AdminEventsScreen() {
       <View style={styles.metaLine}><Ionicons name="calendar-outline" color={theme.muted.val} size={15} /><Text style={[styles.metaText, { color: theme.muted.val }]}>{formatEventDate(item.startsAt)}</Text></View>
       <View style={styles.metaLine}><Ionicons name="location-outline" color={theme.muted.val} size={15} /><Text numberOfLines={2} style={[styles.metaText, { color: theme.muted.val }]}>{item.location} · {item.organizer}</Text></View>
       <View style={styles.metaLine}><Ionicons name="people-outline" color={theme.muted.val} size={15} /><Text style={[styles.metaText, { color: theme.muted.val }]}>Sức chứa {item.capacity} · Đã check-in {item.checkedInCount}</Text></View>
-      <View style={styles.buttons}>
-        <AdminButton label="Sửa" icon="create-outline" compact variant="secondary" onPress={() => router.push({ pathname: '/admin/events/[id]', params: { id: item.id } } as never)} />
-        {item.status === 'draft' ? <AdminButton label="Đăng" icon="send-outline" compact onPress={() => setPending({ event: item, status: 'published' })} /> : null}
-        {item.status === 'published' ? <AdminButton label="Hủy đăng" icon="eye-off-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
-        {item.status === 'archived' ? <AdminButton label="Khôi phục nháp" icon="refresh-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
-        {item.status !== 'archived' ? <AdminButton label="Lưu trữ" icon="archive-outline" compact variant="danger" onPress={() => setPending({ event: item, status: 'archived' })} /> : null}
+      <View style={styles.metaLine}>
+        <Ionicons name="star" color="#F59E0B" size={15} />
+        <Text style={[styles.metaText, { color: theme.color.val }]}>
+          {item.avgRating ? `Đánh giá: ${item.avgRating} / 5.0 (${item.reviewCount || 0} lượt)` : 'Chưa có đánh giá nào'}
+        </Text>
+        {Boolean(item.reviewCount && item.reviewCount > 0) && (
+          <Pressable
+            onPress={() => setSelectedReviewEvent(item)}
+            style={[styles.reviewPillBtn, { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}35` }]}
+          >
+            <Text style={[styles.reviewPillBtnText, { color: theme.primary.val }]}>Xem góp ý</Text>
+          </Pressable>
+        )}
+      </View>
+      <View style={styles.actionGrid}>
+        <View style={styles.actionRow}>
+          <View style={styles.actionCol}>
+            <AdminButton label="Sửa thông tin" icon="create-outline" compact variant="secondary" onPress={() => router.push({ pathname: '/admin/events/[id]', params: { id: item.id } } as never)} />
+          </View>
+          <View style={styles.actionCol}>
+            <AdminButton label="Xuất CSV" icon="download-outline" compact variant="secondary" onPress={() => void handleExportAttendance(item)} />
+          </View>
+        </View>
+        <View style={styles.actionRow}>
+          <View style={styles.actionCol}>
+            {item.status === 'draft' ? <AdminButton label="Đăng sự kiện" icon="send-outline" compact onPress={() => setPending({ event: item, status: 'published' })} /> : null}
+            {item.status === 'published' ? <AdminButton label="Hủy đăng" icon="eye-off-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
+            {item.status === 'archived' ? <AdminButton label="Khôi phục" icon="refresh-outline" compact variant="secondary" onPress={() => setPending({ event: item, status: 'draft' })} /> : null}
+          </View>
+          <View style={styles.actionCol}>
+            {item.status !== 'archived' ? <AdminButton label="Lưu trữ" icon="archive-outline" compact variant="danger" onPress={() => setPending({ event: item, status: 'archived' })} /> : null}
+          </View>
+        </View>
       </View>
     </AdminPanel>
   );
@@ -133,10 +212,13 @@ export default function AdminEventsScreen() {
     <Screen>
       <View style={styles.container}>
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT · ADMIN</Text>
-            <Text style={[styles.heading, { color: theme.color.val }]}>Quản lý sự kiện</Text>
-            <Text style={[styles.subheading, { color: theme.muted.val }]}>Tạo mới, cập nhật, công khai và lưu trữ sự kiện.</Text>
+          <View style={styles.headerBrandRow}>
+            <Image source={require('@/IMG/logo.png')} style={styles.headerLogo} resizeMode="contain" />
+            <View style={styles.headerText}>
+              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT · ADMIN</Text>
+              <Text style={[styles.heading, { color: theme.color.val }]}>Quản lý sự kiện</Text>
+              <Text style={[styles.subheading, { color: theme.muted.val }]}>Tạo mới, cập nhật, công khai và lưu trữ sự kiện.</Text>
+            </View>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Về hồ sơ" onPress={() => router.push('/(tabs)/profile')} style={[styles.profileButton, { borderColor: theme.border.val }]}>
             <Ionicons name="person-circle-outline" color={theme.color.val} size={25} />
@@ -144,7 +226,9 @@ export default function AdminEventsScreen() {
         </View>
         <View style={styles.adminNav}>
           <View style={styles.adminNavItem}><AdminButton label="Thêm sự kiện" icon="add-circle-outline" onPress={() => router.push('/admin/events/new' as never)} /></View>
+          <View style={styles.adminNavItem}><AdminButton label="Đơn vị tổ chức" icon="business-outline" variant="secondary" onPress={() => router.push('/admin/organizers' as never)} /></View>
           <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
+          <View style={styles.adminNavItem}><AdminButton label="Thống kê báo cáo" icon="bar-chart-outline" variant="secondary" onPress={() => router.push('/admin/analytics' as never)} /></View>
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Ionicons name="search" size={19} color={theme.muted.val} />
@@ -200,6 +284,11 @@ export default function AdminEventsScreen() {
         onCancel={() => setPending(null)}
         onConfirm={() => void changeStatus()}
       />
+      <AdminEventReviewsModal
+        visible={Boolean(selectedReviewEvent)}
+        event={selectedReviewEvent}
+        onClose={() => setSelectedReviewEvent(null)}
+      />
     </Screen>
   );
 }
@@ -208,7 +297,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, minHeight: 0, width: '100%', maxWidth: 840, alignSelf: 'center', gap: 12 },
   adminNav: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   adminNavItem: { flexGrow: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  headerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  headerLogo: { width: 44, height: 44, borderRadius: 10 },
   headerText: { flex: 1, gap: 4 }, eyebrow: { fontWeight: '900', fontSize: 11 },
   heading: { fontWeight: '900', fontSize: 24 }, subheading: { fontSize: 12 },
   profileButton: { padding: 9, borderRadius: 12, borderWidth: 1 },
@@ -225,7 +316,30 @@ const styles = StyleSheet.create({
   eventTitle: { flex: 1, fontSize: 16, fontWeight: '900', lineHeight: 22 },
   metaLine: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   metaText: { flex: 1, fontSize: 12, lineHeight: 19 },
-  buttons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', paddingTop: 5 },
+  reviewPillBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  reviewPillBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  actionGrid: {
+    gap: 8,
+    paddingTop: 8,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.18)',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionCol: {
+    flex: 1,
+  },
   pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingVertical: 15, flexWrap: 'wrap' },
   pageText: { fontSize: 12, fontWeight: '800' },
 });

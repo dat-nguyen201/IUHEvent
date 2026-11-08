@@ -15,7 +15,7 @@ import { addNotificationResponseListener } from "@/services/notificationService"
 
 export default function RootLayout() {
   useEffect(() => {
-    const unsubscribe = addNotificationResponseListener((eventId) => {
+    const unsubscribe = addNotificationResponseListener((eventId: string) => {
       router.push({ pathname: "/events/[id]", params: { id: eventId } });
     });
     return () => {

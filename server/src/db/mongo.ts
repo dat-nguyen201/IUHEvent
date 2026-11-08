@@ -30,5 +30,9 @@ export async function ensureIndexes(db: Db) {
     db.collection('registrations').createIndex({ eventId: 1, status: 1 }),
     db.collection('savedEvents').createIndex({ userId: 1, eventId: 1 }, { unique: true, name: 'saved_user_event_unique' }),
     db.collection('savedEvents').createIndex({ userId: 1, savedAt: -1 }),
+    db.collection('reviews').createIndex({ eventId: 1, createdAt: -1 }),
+    db.collection('reviews').createIndex({ userId: 1, eventId: 1 }),
+    db.collection('notifications').createIndex({ userId: 1, createdAt: -1 }),
+    db.collection('notifications').createIndex({ userId: 1, read: 1 }),
   ]);
 }

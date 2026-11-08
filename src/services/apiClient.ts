@@ -74,7 +74,14 @@ export async function apiRequest<T>(
       throw new ApiError('NETWORK_ERROR', 'Không thể kết nối máy chủ. Hãy kiểm tra mạng và thử lại.');
     }
 
-    const payload = await response.json().catch(() => null) as ApiErrorPayload | null;
+    const rawText = await response.text().catch(() => '');
+    let payload: ApiErrorPayload | null = null;
+    try {
+      payload = JSON.parse(rawText) as ApiErrorPayload;
+    } catch {
+      payload = rawText ? ({ message: rawText } as ApiErrorPayload) : null;
+    }
+
     if (!response.ok) {
       const payloadCode = payload?.error?.code ?? payload?.code;
       const payloadMessage = payload?.error?.message ?? payload?.message;
@@ -84,12 +91,32 @@ export async function apiRequest<T>(
           ? 'UNAUTHORIZED'
           : response.status === 403
             ? 'FORBIDDEN'
-            : response.status === 409
-              ? 'CONFLICT'
-              : 'API_ERROR';
-      const message = typeof payloadMessage === 'string'
+            : response.status === 404
+              ? 'NOT_FOUND'
+              : response.status === 409
+                ? 'CONFLICT'
+                : response.status === 429
+                  ? 'TOO_MANY_REQUESTS'
+                  : 'API_ERROR';
+
+      const defaultMessage = response.status === 401
+        ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+        : response.status === 403
+          ? 'Bạn không có quyền thực hiện thao tác này.'
+          : response.status === 404
+            ? 'Không tìm thấy dữ liệu yêu cầu.'
+            : response.status === 429
+              ? 'Thao tác quá nhanh. Vui lòng chờ giây lát.'
+              : 'Yêu cầu chưa thực hiện được. Hãy thử lại.';
+
+      const message = typeof payloadMessage === 'string' && payloadMessage.trim()
         ? payloadMessage
-        : 'Yêu cầu chưa thực hiện được. Hãy thử lại.';
+        : defaultMessage;
+
+      if (__DEV__) {
+        console.warn(`[apiClient] HTTP ${response.status} on ${options.method ?? 'GET'} ${path} -> [${code}]: ${message}`);
+      }
+
       if (
         options.token &&
         (response.status === 401 || (response.status === 403 && code === 'ACCOUNT_SUSPENDED'))

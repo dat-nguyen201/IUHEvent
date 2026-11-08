@@ -16,6 +16,8 @@ export type AdminEvent = {
   imageKey?: string;
   imageUrl?: string;
   status: AdminEventStatus;
+  avgRating?: number | null;
+  reviewCount?: number;
 };
 
 export type AdminEventInput = {

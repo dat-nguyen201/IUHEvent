@@ -4,6 +4,8 @@ import { Platform } from 'react-native';
 
 import { getStoredValue, removeStoredValue, setStoredValue } from '@/services/authStorage';
 import { formatEventDate } from '@/utils/date';
+import { apiRequest } from '@/services/apiClient';
+import { getRemoteAccessToken } from '@/services/remoteAuthService';
 
 const STORAGE_REMINDER_PREFIX = 'iuh_event_reminder_';
 
@@ -21,13 +23,13 @@ if (Platform.OS !== 'web') {
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS === 'android') {
     try {
-    await Notifications.setNotificationChannelAsync('iuh-event-reminders', {
-      name: 'Nhắc nhở sự kiện IUH',
-      importance: AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#1F4E79',
-    });
-    } catch (err) {
+      await Notifications.setNotificationChannelAsync('iuh-event-reminders', {
+        name: 'Nhắc nhở sự kiện IUH',
+        importance: AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#1F4E79',
+      });
+    } catch (err) {
       console.warn('Cannot setup notification channel in current environment:', err);
     }
   }
@@ -69,7 +71,11 @@ export async function requestNotificationPermission(): Promise<PermissionResult>
       },
     });
 
-    try { await setupNotificationChannels(); } catch (e) { console.warn(e); }
+    try {
+      await setupNotificationChannels();
+    } catch (e) {
+      console.warn(e);
+    }
 
     return {
       granted: settings.granted || settings.ios?.status === IosAuthorizationStatus.PROVISIONAL,
@@ -195,12 +201,12 @@ export async function cancelEventReminder(eventId: string): Promise<boolean> {
 }
 
 export async function isReminderScheduled(eventId: string): Promise<boolean> {
+  const raw = await getStoredValue(`${STORAGE_REMINDER_PREFIX}${eventId}`);
+  if (!raw) return false;
+
+  if (Platform.OS === 'web') return true;
+
   try {
-    const raw = await getStoredValue(`${STORAGE_REMINDER_PREFIX}${eventId}`);
-    if (!raw) return false;
-
-    if (Platform.OS === 'web') return true;
-
     const data = JSON.parse(raw);
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
     const exists = scheduledNotifications.some((n) => n.identifier === data.notificationId);
@@ -231,4 +237,65 @@ export function addNotificationResponseListener(onSelectEvent: (eventId: string)
   return () => {
     subscription.remove();
   };
+}
+
+// -------------------------------------------------------------
+// Remote Backend Notification API
+// -------------------------------------------------------------
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: 'event' | 'point' | 'system';
+  eventId?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  data: AppNotification[];
+  unreadCount: number;
+}
+
+export async function fetchNotifications(): Promise<NotificationsResponse> {
+  const token = await getRemoteAccessToken();
+  if (!token) {
+    return { data: [], unreadCount: 0 };
+  }
+  return apiRequest<NotificationsResponse>('/api/notifications', { token });
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const token = await getRemoteAccessToken();
+  if (!token) return 0;
+  try {
+    const res = await apiRequest<{ unreadCount: number }>('/api/notifications/unread-count', { token });
+    return res.unreadCount;
+  } catch {
+    return 0;
+  }
+}
+
+export async function markNotificationAsRead(id: string): Promise<number> {
+  const token = await getRemoteAccessToken();
+  if (!token) return 0;
+  try {
+    const res = await apiRequest<{ success: boolean; unreadCount: number }>(
+      `/api/notifications/${encodeURIComponent(id)}/read`,
+      { method: 'PATCH', token },
+    );
+    return res.unreadCount;
+  } catch {
+    return 0;
+  }
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+  const token = await getRemoteAccessToken();
+  if (!token) return;
+  await apiRequest<{ success: boolean; unreadCount: number }>(
+    '/api/notifications/read-all',
+    { method: 'POST', token },
+  );
 }

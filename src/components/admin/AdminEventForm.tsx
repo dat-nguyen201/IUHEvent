@@ -11,6 +11,8 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { AdminButton, AdminNotice, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminWidgets';
 import { Screen } from '@/components/Screen';
 import { createAdminEvent, getAdminEvent, getAdminEventError, updateAdminEvent } from '@/services/adminEventService';
+import { getAllOrganizers } from '@/services/organizerService';
+import type { Organizer } from '@/data/organizers';
 import type { AdminEvent } from '@/types/admin-events';
 import type { EventCategory } from '@/types/events';
 import {
@@ -27,6 +29,7 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [availableOrganizers, setAvailableOrganizers] = useState<Organizer[]>([]);
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | null>(null);
   const [pickerDraft, setPickerDraft] = useState(() => new Date());
   const isEditing = Boolean(eventId);
@@ -44,6 +47,9 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
   }, [eventId]);
 
   useEffect(() => { void loadEvent(); }, [loadEvent]);
+  useEffect(() => {
+    void getAllOrganizers().then(setAvailableOrganizers);
+  }, []);
 
   const setField = useCallback(<K extends keyof AdminEventFormValues>(key: K, value: AdminEventFormValues[K]) => {
     setValues(current => ({ ...current, [key]: value }));
@@ -113,7 +119,51 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
             <AdminPanel>
               {event ? <View style={styles.currentStatus}><Text style={{ color: theme.muted.val }}>Trạng thái hiện tại</Text><AdminStatusBadge status={event.status} /></View> : null}
               {fieldSpecs.map(({ key, label, placeholder }) => (
-                <EventInput key={key} label={label} value={values[key]} placeholder={placeholder} error={errors[key]} disabled={busy} onChange={text => setField(key, text)} />
+                <View key={key}>
+                  <EventInput label={label} value={values[key]} placeholder={placeholder} error={errors[key]} disabled={busy} onChange={text => setField(key, text)} />
+                  {key === 'organizer' && availableOrganizers.length > 0 ? (
+                    <View style={styles.organizerSuggestions}>
+                      <Text style={[styles.suggestionLabel, { color: theme.muted.val }]}>Chọn nhanh đơn vị:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChips}>
+                        {availableOrganizers.map(org => {
+                          const selected = values.organizer === org.name;
+                          return (
+                            <Pressable
+                              key={org.id}
+                              disabled={busy}
+                              onPress={() => setField('organizer', org.name)}
+                              style={[
+                                styles.suggestionChip,
+                                {
+                                  borderColor: selected ? theme.primary.val : theme.border.val,
+                                  backgroundColor: selected ? `${theme.primary.val}18` : theme.surface.val,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.suggestionChipText,
+                                  { color: selected ? theme.primary.val : theme.color.val },
+                                  selected && { fontWeight: '800' },
+                                ]}
+                              >
+                                {org.shortName || org.name}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                        <Pressable
+                          disabled={busy}
+                          onPress={() => router.push('/admin/organizers' as never)}
+                          style={[styles.suggestionChip, { borderColor: theme.border.val, backgroundColor: theme.surface.val }]}
+                        >
+                          <Ionicons name="settings-outline" size={12} color={theme.primary.val} />
+                          <Text style={[styles.suggestionChipText, { color: theme.primary.val }]}>Quản lý đơn vị</Text>
+                        </Pressable>
+                      </ScrollView>
+                    </View>
+                  ) : null}
+                </View>
               ))}
               <EventInput label="Mô tả *" value={values.description} error={errors.description} onChange={text => setField('description', text)} disabled={busy} placeholder="Nội dung và mục đích sự kiện..." multiline />
               <Text style={[styles.label, { color: theme.color.val }]}>Danh mục *</Text>
@@ -295,5 +345,18 @@ const styles = StyleSheet.create({
   categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   category: { paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderRadius: 10, minHeight: 38 },
   categoryText: { fontSize: 12, fontWeight: '700' },
+  organizerSuggestions: { marginTop: 6, gap: 4 },
+  suggestionLabel: { fontSize: 11, fontWeight: '600' },
+  suggestionChips: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  suggestionChipText: { fontSize: 11.5, fontWeight: '600' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 8 },
 });

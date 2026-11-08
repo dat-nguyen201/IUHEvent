@@ -65,6 +65,41 @@ export async function setAdminEventStatus(id: string, status: AdminEventStatus):
   return result.data;
 }
 
+export interface AttendanceRecord {
+  studentId: string;
+  name: string;
+  email: string;
+  major: string;
+  status: string;
+  registeredAt?: string;
+  checkedInAt?: string | null;
+}
+
+export async function getEventAttendance(id: string): Promise<{
+  data: AttendanceRecord[];
+  total: number;
+  checkedInTotal: number;
+}> {
+  const token = await getAdminToken();
+  return apiRequest<{
+    data: AttendanceRecord[];
+    total: number;
+    checkedInTotal: number;
+  }>(`${eventPath(id)}/attendance`, { token });
+}
+
+export function generateAttendanceCsv(eventTitle: string, items: AttendanceRecord[]): string {
+  const header = '\uFEFFSTT,Mã số sinh viên,Họ và tên,Email,Khoa/Chuyên ngành,Thời gian điểm danh,Trạng thái\n';
+  const rows = items.map((item, idx) => {
+    const time = item.checkedInAt
+      ? new Date(item.checkedInAt).toLocaleString('vi-VN')
+      : 'Chưa điểm danh';
+    const status = item.status === 'checked-in' ? 'Đã điểm danh' : 'Đã đăng ký (chưa điểm danh)';
+    return `${idx + 1},"${item.studentId}","${item.name}","${item.email}","${item.major}","${time}","${status}"`;
+  });
+  return header + rows.join('\n');
+}
+
 export function getAdminEventError(error: unknown) {
   if (error instanceof ApiError) {
     const labels: Record<string, string> = {
