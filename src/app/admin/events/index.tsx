@@ -349,7 +349,6 @@ export default function AdminEventsScreen() {
             />
             <View style={styles.headerText}>
               <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
-              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
                 {user?.role === "organizer"
                   ? "IUH EVENT · ĐƠN VỊ TỔ CHỨC"
                   : "IUH EVENT · ADMIN"}
