@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { createEventSchema, createOrganizerSchema, registerSchema, profileSchema } from '../src/lib/validation';
+import { createEventSchema, createOrganizerSchema, updateOrganizerSchema, registerSchema, profileSchema } from '../src/lib/validation';
 import { hashPassword, verifyPassword, signAccessToken, verifyAccessToken } from '../src/lib/security';
 
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-unit-tests';
@@ -51,6 +51,22 @@ test('organizer creation validates the organization and account email together',
     email: 'clb@iuh.edu.vn',
     role: 'admin',
   }));
+});
+
+test('organizer profile updates accept only editable organization fields', () => {
+  const parsed = updateOrganizerSchema.parse({
+    name: 'Câu lạc bộ Công nghệ',
+    shortName: 'CLB Công nghệ',
+    description: 'Mô tả mới',
+    contactEmail: 'CLB@IUH.EDU.VN',
+  });
+  assert.equal(parsed.contactEmail, 'clb@iuh.edu.vn');
+  assert.throws(() => updateOrganizerSchema.parse({ role: 'admin' }));
+  assert.throws(() => updateOrganizerSchema.parse({ type: 'faculty' }));
+  assert.throws(() => updateOrganizerSchema.parse({ location: 'Nhà H, IUH' }));
+  assert.throws(() => updateOrganizerSchema.parse({ color: '#FD7E14' }));
+  assert.throws(() => updateOrganizerSchema.parse({}));
+  assert.throws(() => updateOrganizerSchema.parse({ contactEmail: 'invalid' }));
 });
 
 test('event creation may omit organizer so the server can apply the signed-in organizer identity', () => {

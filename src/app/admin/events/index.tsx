@@ -384,7 +384,11 @@ export default function AdminEventsScreen() {
           </View>
           <View style={styles.adminNavItem}>
             <AdminButton
-              label="Đơn vị tổ chức"
+              label={
+                user?.role === "organizer"
+                  ? "Đơn vị của tôi"
+                  : "Đơn vị tổ chức"
+              }
               icon="business-outline"
               variant="secondary"
               onPress={() => router.push("/admin/organizers" as never)}

@@ -121,6 +121,18 @@ export async function listAdminOrganizers(): Promise<{ data: AdminOrganizerRecor
   });
 }
 
+export async function updateOwnOrganizer(input: Pick<
+  AdminOrganizerRecord,
+  "name" | "shortName" | "description" | "contactEmail"
+>): Promise<AdminOrganizerRecord> {
+  const response = await apiRequest<{ data: AdminOrganizerRecord }>("/api/admin/organizers/me", {
+    method: "PATCH",
+    body: input,
+    token: await token(),
+  });
+  return response.data;
+}
+
 export function getAdminUserError(error: unknown) {
   if (error instanceof ApiError) {
     const labels: Record<string, string> = {
@@ -128,6 +140,7 @@ export function getAdminUserError(error: unknown) {
       FORBIDDEN: "Bạn không có quyền quản trị người dùng.",
       ACCOUNT_SUSPENDED: "Tài khoản đã bị khóa.",
       USER_NOT_FOUND: "Không tìm thấy người dùng.",
+      ORGANIZER_NOT_FOUND: "Tài khoản chưa được gắn với đơn vị tổ chức.",
       STUDENT_ID_EXISTS: "Mã sinh viên đã được sử dụng.",
       EMAIL_EXISTS: "Email này đã thuộc về tài khoản khác.",
       CANNOT_SUSPEND_SELF: "Không thể tự khóa tài khoản admin đang đăng nhập.",

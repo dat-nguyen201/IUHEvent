@@ -25,7 +25,7 @@ import {
   getAllOrganizers,
   type CreateOrganizerInput,
 } from '@/services/organizerService';
-import { getAdminUserError } from '@/services/adminUserService';
+import { getAdminUserError, updateOwnOrganizer } from '@/services/adminUserService';
 
 const TYPE_OPTIONS: { value: OrganizerType; label: string }[] = [
   { value: 'faculty', label: 'Khoa chuyên ngành' },
@@ -35,8 +35,9 @@ const TYPE_OPTIONS: { value: OrganizerType; label: string }[] = [
 ];
 
 export default function AdminOrganizersScreen() {
-  const { user } = useAuth();
+  const { user, mode } = useAuth();
   const isOrganizer = user?.role === 'organizer';
+  const canEditOrganizer = isOrganizer && mode === 'remote';
   const theme = useTheme();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [query, setQuery] = useState('');
@@ -48,6 +49,7 @@ export default function AdminOrganizersScreen() {
   const [formError, setFormError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [createdAccount, setCreatedAccount] = useState<{ email: string; password: string } | null>(null);
+  const [editingOrganizer, setEditingOrganizer] = useState<Organizer | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -56,6 +58,22 @@ export default function AdminOrganizersScreen() {
   const [description, setDescription] = useState('');
   const [email, setEmail] = useState('');
   const [location, setLocation] = useState('');
+
+  const resetForm = () => {
+    setName('');
+    setShortName('');
+    setType('club');
+    setDescription('');
+    setEmail('');
+    setLocation('');
+    setFormError('');
+  };
+
+  const closeForm = () => {
+    setModalVisible(false);
+    setEditingOrganizer(null);
+    resetForm();
+  };
 
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
@@ -114,6 +132,46 @@ export default function AdminOrganizersScreen() {
     }
   };
 
+  const openEdit = (org: Organizer) => {
+    setEditingOrganizer(org);
+    setName(org.name);
+    setShortName(org.shortName);
+    setType(org.type);
+    setDescription(org.description);
+    setEmail(org.contactEmail || '');
+    setLocation(org.location || '');
+    setFormError('');
+    setModalVisible(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!canEditOrganizer || !editingOrganizer) return;
+    if (!name.trim() || !shortName.trim() || !email.trim()) {
+      setFormError('Vui lòng nhập tên, tên viết tắt và email liên hệ.');
+      return;
+    }
+
+    setFormError('');
+    setIsSubmitting(true);
+    try {
+      await updateOwnOrganizer({
+        name: name.trim(),
+        shortName: shortName.trim(),
+        description: description.trim(),
+        contactEmail: email.trim(),
+      });
+      setModalVisible(false);
+      setEditingOrganizer(null);
+      resetForm();
+      await loadData();
+    } catch (e) {
+      console.warn('Cannot update organizer profile:', e);
+      setFormError(getAdminUserError(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDelete = async (org: Organizer) => {
     if (!org.id.startsWith('org-custom-')) return;
     try {
@@ -152,7 +210,11 @@ export default function AdminOrganizersScreen() {
           </View>
           {!isOrganizer ? (
             <Pressable
-              onPress={() => setModalVisible(true)}
+              onPress={() => {
+                resetForm();
+                setEditingOrganizer(null);
+                setModalVisible(true);
+              }}
               style={[styles.addBtn, { backgroundColor: theme.primary.val }]}
               accessibilityRole="button"
               accessibilityLabel="Thêm đơn vị"
@@ -277,6 +339,16 @@ export default function AdminOrganizersScreen() {
                       >
                         <Ionicons name="trash-outline" size={18} color="#DC3545" />
                       </Pressable>
+                    ) : canEditOrganizer ? (
+                      <Pressable
+                        onPress={() => openEdit(item)}
+                        style={styles.deleteBtn}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Chỉnh sửa thông tin đơn vị"
+                      >
+                        <Ionicons name="create-outline" size={19} color={theme.primary.val} />
+                      </Pressable>
                     ) : !isOrganizer && !isRemote ? (
                       <View style={styles.systemBadge}>
                         <Text style={styles.systemBadgeText}>Hệ thống</Text>
@@ -328,13 +400,22 @@ export default function AdminOrganizersScreen() {
           />
         )}
 
-        {/* Modal Thêm Đơn Vị Mới */}
-        <Modal visible={modalVisible} animationType="slide" transparent>
+        {/* Modal thêm hoặc cập nhật đơn vị */}
+        <Modal
+          visible={modalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => {
+            closeForm();
+          }}
+        >
           <View style={styles.modalOverlay}>
             <View style={[styles.modalCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
               <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.color.val }]}>Thêm đơn vị tổ chức</Text>
-                <Pressable onPress={() => setModalVisible(false)} hitSlop={10}>
+                <Text style={[styles.modalTitle, { color: theme.color.val }]}>
+                  {editingOrganizer ? 'Chỉnh sửa đơn vị của tôi' : 'Thêm đơn vị tổ chức'}
+                </Text>
+                <Pressable onPress={closeForm} hitSlop={10}>
                   <Ionicons name="close" size={22} color={theme.muted.val} />
                 </Pressable>
               </View>
@@ -361,10 +442,11 @@ export default function AdminOrganizersScreen() {
                 />
 
                 <Text style={[styles.inputLabel, { color: theme.color.val }]}>Phân loại đơn vị</Text>
-                <View style={styles.formTypeGrid}>
+                <View style={[styles.formTypeGrid, editingOrganizer && styles.disabledField]}>
                   {TYPE_OPTIONS.map((item) => (
                     <Pressable
                       key={item.value}
+                      disabled={Boolean(editingOrganizer)}
                       onPress={() => setType(item.value)}
                       style={[
                         styles.formTypePill,
@@ -384,9 +466,11 @@ export default function AdminOrganizersScreen() {
                   ))}
                 </View>
 
-                <Text style={[styles.inputLabel, { color: theme.color.val }]}>Email tài khoản / liên hệ</Text>
+                <Text style={[styles.inputLabel, { color: theme.color.val }]}>
+                  {editingOrganizer ? 'Email liên hệ của đơn vị' : 'Email tài khoản / liên hệ'}
+                </Text>
                 <TextInput
-                  placeholder="Để trống để tự tạo email theo tên đơn vị"
+                  placeholder={editingOrganizer ? 'Email liên hệ của đơn vị' : 'Để trống để tự tạo email theo tên đơn vị'}
                   placeholderTextColor={theme.muted.val}
                   value={email}
                   onChangeText={setEmail}
@@ -400,7 +484,12 @@ export default function AdminOrganizersScreen() {
                   placeholderTextColor={theme.muted.val}
                   value={location}
                   onChangeText={setLocation}
-                  style={[styles.textInput, { color: theme.color.val, borderColor: theme.border.val }]}
+                  editable={!editingOrganizer}
+                  style={[
+                    styles.textInput,
+                    editingOrganizer && styles.disabledField,
+                    { color: theme.color.val, borderColor: theme.border.val },
+                  ]}
                 />
 
                 <Text style={[styles.inputLabel, { color: theme.color.val }]}>Mô tả giới thiệu</Text>
@@ -420,20 +509,22 @@ export default function AdminOrganizersScreen() {
 
                 <View style={styles.modalActions}>
                   <Pressable
-                    onPress={() => setModalVisible(false)}
+                    onPress={closeForm}
                     style={[styles.cancelBtn, { borderColor: theme.border.val }]}
                   >
                     <Text style={[styles.cancelBtnText, { color: theme.color.val }]}>Hủy</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => void handleCreate()}
+                    onPress={() => void (editingOrganizer ? handleUpdate() : handleCreate())}
                     disabled={isSubmitting}
                     style={[styles.submitBtn, { backgroundColor: theme.primary.val }]}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color="#FFF" />
                     ) : (
-                      <Text style={styles.submitBtnText}>Thêm đơn vị</Text>
+                      <Text style={styles.submitBtnText}>
+                        {editingOrganizer ? 'Lưu thay đổi' : 'Thêm đơn vị'}
+                      </Text>
                     )}
                   </Pressable>
                 </View>
@@ -718,6 +809,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
     marginVertical: 4,
+  },
+  disabledField: {
+    opacity: 0.55,
   },
   formTypePill: {
     paddingHorizontal: 10,
