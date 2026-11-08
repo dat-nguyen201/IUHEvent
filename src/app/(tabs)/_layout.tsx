@@ -24,7 +24,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{
+        screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: theme.primary.val,
         tabBarInactiveTintColor: theme.muted.val,
@@ -44,43 +44,43 @@ export default function TabLayout() {
           fontSize: 12,
           fontWeight: '600',
         },
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Trang chủ',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Trang chủ" name="home-outline" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: 'Khám phá',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Khám phá" name="compass-outline" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="schedule"
-        options={{
-          title: 'Lịch của tôi',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Lịch của tôi" name="calendar-outline" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Hồ sơ',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Hồ sơ" name="person-outline" />
-          ),
-        }}
-      />
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Trang chủ',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Trang chủ" name="home-outline" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="discover"
+          options={{
+            title: 'Khám phá',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Khám phá" name="compass-outline" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="schedule"
+          options={{
+            title: 'Lịch của tôi',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Lịch của tôi" name="calendar-outline" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Hồ sơ',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon activePillBackground={activePillBackground} activePillBorder={activePillBorder} color={color} focused={focused} label="Hồ sơ" name="person-outline" />
+            ),
+          }}
+        />
     </Tabs>
   );
 }

@@ -22,10 +22,22 @@ type ChatResponse = {
 
 function demoReply(message: string): ChatMessage {
   const normalized = message.toLocaleLowerCase('vi-VN');
-  if (normalized.includes('đăng ký') || normalized.includes('tham gia')) {
+  if (
+    normalized.includes('cần người hỗ trợ')
+    || normalized.includes('cần một người hỗ trợ')
+    || normalized.includes('cần hỗ trợ')
+    || normalized.includes('gặp người hỗ trợ')
+    || normalized.includes('liên hệ hỗ trợ')
+  ) {
     return {
       role: 'assistant',
-      content: 'Bạn mở mục Khám phá, chọn sự kiện phù hợp rồi nhấn Đăng ký tham gia. Lịch đã đăng ký sẽ xuất hiện trong mục Lịch của tôi.',
+      content: 'Bạn hãy liên hệ trực tiếp Phòng Tổ chức sự kiện tại trường IUH để được hỗ trợ.',
+    };
+  }
+  if (/\b(hướng dẫn|cách)\s+(đăng\s+k[ýi]|sự kiện)\b|\bđăng\s+k[ýi]\s+sự kiện\b/i.test(normalized)) {
+    return {
+      role: 'assistant',
+      content: 'Để đăng ký sự kiện:\n1. Chọn sự kiện ở mục Khám phá.\n2. Chọn “Đăng ký tham gia ngay”.\n3. Khi có thông báo, nghĩa là bạn đã đăng ký thành công.',
     };
   }
   if (normalized.includes('check-in') || normalized.includes('qr')) {

@@ -37,7 +37,7 @@ import { scheduleAutoReminderOnRegister, triggerLocalNotificationNow } from "@/s
 import { saveOfflineTicket, markOfflineTicketCheckedIn, removeOfflineTicket } from "@/services/offlineTicketService";
 
 export default function EventDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fromChat } = useLocalSearchParams<{ id: string; fromChat?: string }>();
   const [event, setEvent] = useState<StudentEvent | undefined>(() =>
     id ? getEventByIdSync(id) : undefined,
   );
@@ -105,10 +105,32 @@ export default function EventDetailScreen() {
     void loadEventDetail();
   }, [loadEventDetail]);
 
+  useEffect(() => {
+    if (!id) return;
+    setEvent(undefined);
+    setError(null);
+    setIsLoading(true);
+  }, [id]);
+
+  const checkedIn = checkedInEventIds.includes(event?.id ?? "");
+  const handleBack = () => {
+    if (fromChat === "1") {
+      router.replace({ pathname: "/(tabs)", params: { openChat: "1" } });
+      return;
+    }
+    router.back();
+  };
+
+  useEffect(() => {
+    if (checkedIn && event?.id) {
+      void markOfflineTicketCheckedIn(event.id);
+    }
+  }, [checkedIn, event?.id]);
+
   if (isLoading && !event) {
     return (
       <Screen>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Text style={[styles.backText, { color: theme.color.val }]}>
             ‹ Quay lại
           </Text>
@@ -126,7 +148,7 @@ export default function EventDetailScreen() {
   if (error && error !== "EVENT_NOT_FOUND" && !event) {
     return (
       <Screen>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Text style={[styles.backText, { color: theme.color.val }]}>
             ‹ Quay lại
           </Text>
@@ -144,7 +166,7 @@ export default function EventDetailScreen() {
   if (!event) {
     return (
       <Screen>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Text style={[styles.backText, { color: theme.color.val }]}>
             ‹ Quay lại
           </Text>
@@ -161,7 +183,6 @@ export default function EventDetailScreen() {
 
   const saved = isEventSaved(event.id);
   const registered = isEventRegistered(event.id);
-  const checkedIn = checkedInEventIds.includes(event.id);
   const isEventExpired = !isFutureEvent(event.startsAt);
 
   const handleToggleSave = async () => {
@@ -188,12 +209,6 @@ export default function EventDetailScreen() {
       );
     }
   };
-
-  useEffect(() => {
-    if (checkedIn && event?.id) {
-      void markOfflineTicketCheckedIn(event.id);
-    }
-  }, [checkedIn, event?.id]);
 
   const handleRegister = async () => {
     if (isEventExpired) {
@@ -311,7 +326,7 @@ export default function EventDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={handleBack} style={styles.backButton}>
           <Text style={[styles.backText, { color: theme.color.val }]}>
             ‹ Quay lại
           </Text>

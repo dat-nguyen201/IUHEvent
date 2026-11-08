@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams, useSegments } from 'expo-router';
 import { useTheme } from '@tamagui/core';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/services/apiClient';
 import { sendChatMessage, type ChatMessage } from '@/services/aiChatService';
+import { cacheStudentEvents } from '@/services/eventsApi';
 
 const welcomeMessage: ChatMessage = {
   role: 'assistant',
@@ -28,37 +29,86 @@ const welcomeMessage: ChatMessage = {
 
 export function AIChatWidget() {
   const { user } = useAuth();
+  const { openChat } = useLocalSearchParams<{ openChat?: string }>();
+  const segments = useSegments() as readonly string[];
   const theme = useTheme();
   const [visible, setVisible] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [error, setError] = useState<string | null>(null);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
+  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const isNavigatingToEvent = useRef(false);
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const suggestions = useMemo(() => ['Có sự kiện nào sắp diễn ra?', 'Hướng dẫn đăng ký sự kiện', 'Check-in QR như thế nào?'], []);
+  const suggestions = useMemo(() => [
+    'Có sự kiện nào sắp diễn ra?',
+    'Check-in QR như thế nào?',
+    'Tôi cần người hỗ trợ',
+  ], []);
+
+  useEffect(() => () => {
+    if (navigationTimer.current) clearTimeout(navigationTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (openChat === '1') setVisible(true);
+  }, [openChat]);
+
+  const isProfileArea = segments.some((segment) => [
+    'profile',
+    'change-password',
+    'admin',
+    'schedule',
+    'check-in',
+    'leaderboard',
+    'offline-tickets',
+  ].includes(segment));
+
+  useEffect(() => {
+    if (isProfileArea) setVisible(false);
+  }, [isProfileArea]);
+
+  const scrollToLatest = useCallback(() => {
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (visible) scrollToLatest();
+  }, [messages, isSending, visible, scrollToLatest]);
 
   const send = useCallback(async (value = input) => {
     const content = value.trim();
     if (!content || isSending) return;
-    const nextMessages = [...messages, { role: 'user' as const, content }];
+    const isRetry = retryMessage === content
+      && messages.at(-1)?.role === 'user'
+      && messages.at(-1)?.content === content;
+    const nextMessages = isRetry
+      ? messages
+      : [...messages, { role: 'user' as const, content }];
     setMessages(nextMessages);
     setInput('');
     setError(null);
+    setRetryMessage(null);
     setIsSending(true);
     try {
       const reply = await sendChatMessage(nextMessages);
       setMessages((current) => [...current, reply]);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : 'Không thể kết nối trợ lý. Hãy thử lại.');
+      setRetryMessage(content);
     } finally {
       setIsSending(false);
     }
-  }, [input, isSending, messages]);
+  }, [input, isSending, messages, retryMessage]);
 
-  if (!user) return null;
+  if (!user || isProfileArea) return null;
 
   return (
-    <>
+    <View pointerEvents="box-none" style={styles.overlayHost}>
       <Pressable
         accessibilityLabel="Mở trợ lý AI"
         onPress={() => setVisible(true)}
@@ -67,7 +117,7 @@ export function AIChatWidget() {
         <Ionicons name="chatbubble-ellipses-outline" size={24} color="#FFFFFF" />
       </Pressable>
       <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
           <SafeAreaView style={[styles.sheet, { backgroundColor: theme.background.val }]}>
             <View style={[styles.header, { borderBottomColor: theme.border.val }]}>
               <View style={styles.headerTitle}>
@@ -84,9 +134,13 @@ export function AIChatWidget() {
               </Pressable>
             </View>
             <FlatList
+              ref={listRef}
+              style={styles.list}
               contentContainerStyle={styles.messageList}
               data={messages}
+              keyboardShouldPersistTaps="handled"
               keyExtractor={(_, index) => `${index}`}
+              onContentSizeChange={scrollToLatest}
               renderItem={({ item }) => (
                 <View>
                   <View style={[styles.message, item.role === 'user' ? styles.userMessage : styles.assistantMessage, { backgroundColor: item.role === 'user' ? theme.primary.val : theme.surface.val }]}>
@@ -97,8 +151,20 @@ export function AIChatWidget() {
                       accessibilityLabel={`Mở sự kiện ${event.title}`}
                       key={event.id}
                       onPress={() => {
+                        if (isNavigatingToEvent.current) return;
+                        isNavigatingToEvent.current = true;
+                        cacheStudentEvents([event], 'remote');
                         setVisible(false);
-                        router.push({ pathname: '/events/[id]', params: { id: event.id } });
+                        navigationTimer.current = setTimeout(() => {
+                          navigationTimer.current = null;
+                          router.push({
+                            pathname: '/events/[id]',
+                            params: { id: String(event.id), fromChat: '1' },
+                          });
+                          setTimeout(() => {
+                            isNavigatingToEvent.current = false;
+                          }, 500);
+                        }, 300);
                       }}
                       style={[styles.eventCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}
                     >
@@ -126,7 +192,20 @@ export function AIChatWidget() {
                     ))}
                   </View>
                   {isSending ? <ActivityIndicator color={theme.primary.val} style={styles.loading} /> : null}
-                  {error ? <Text style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
+                  {error ? (
+                    <View style={styles.errorRow}>
+                      <Text style={[styles.error, { color: theme.danger.val }]}>{error}</Text>
+                      {retryMessage ? (
+                        <Pressable
+                          accessibilityLabel="Thử gửi lại tin nhắn"
+                          disabled={isSending}
+                          onPress={() => void send(retryMessage)}
+                        >
+                          <Text style={[styles.retry, { color: theme.primary.val }]}>Thử lại</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </>
               )}
             />
@@ -148,11 +227,20 @@ export function AIChatWidget() {
           </SafeAreaView>
         </KeyboardAvoidingView>
       </Modal>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlayHost: {
+    bottom: 0,
+    elevation: 20,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 20,
+  },
   floatingButton: {
     alignItems: 'center',
     borderRadius: 28,
@@ -176,6 +264,7 @@ const styles = StyleSheet.create({
   avatar: { alignItems: 'center', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
   title: { fontSize: 16, fontWeight: '700' },
   subtitle: { fontSize: 12, marginTop: 2 },
+  list: { flex: 1 },
   messageList: { gap: 10, padding: 16 },
   message: { borderRadius: 16, maxWidth: '86%', padding: 12 },
   userMessage: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
@@ -191,7 +280,9 @@ const styles = StyleSheet.create({
   suggestion: { borderRadius: 14, borderWidth: 1, padding: 10 },
   suggestionText: { fontSize: 13 },
   loading: { alignSelf: 'flex-start', margin: 8 },
-  error: { fontSize: 13, marginTop: 8 },
+  errorRow: { alignItems: 'center', flexDirection: 'row', gap: 8, marginTop: 8 },
+  error: { flex: 1, fontSize: 13 },
+  retry: { fontSize: 13, fontWeight: '700' },
   inputRow: { alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, padding: 12 },
   input: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 10, paddingVertical: 8 },
   sendButton: { alignItems: 'center', borderRadius: 20, height: 40, justifyContent: 'center', width: 40 },
