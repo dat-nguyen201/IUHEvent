@@ -24,7 +24,7 @@ export default function IntroScreen() {
     else if (!hasSeenGetStarted) router.replace("/get-started");
     else
       router.replace(
-        mode === "remote" && user.role === "admin"
+        mode === "remote" && (user.role === "admin" || user.role === "organizer")
           ? ("/admin/events" as never)
           : "/(tabs)",
       );

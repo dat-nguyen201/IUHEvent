@@ -10,6 +10,7 @@ import { Screen } from '@/components/Screen';
 import { generateAttendanceCsv, getAdminEventError, getEventAttendance, listAdminEvents, setAdminEventStatus } from '@/services/adminEventService';
 import type { AdminEvent, AdminEventStatus } from '@/types/admin-events';
 import { formatEventDate } from '@/utils/date';
+import { useAuth } from '@/context/AuthContext';
 
 const PAGE_SIZE = 10;
 const STATUSES = [
@@ -27,6 +28,7 @@ const SUCCESS_MESSAGES: Record<string, string> = {
 };
 
 export default function AdminEventsScreen() {
+  const { user } = useAuth();
   const theme = useTheme();
   const { feedback } = useLocalSearchParams<{ feedback?: string }>();
   const [items, setItems] = useState<AdminEvent[]>([]);
@@ -215,7 +217,9 @@ export default function AdminEventsScreen() {
           <View style={styles.headerBrandRow}>
             <Image source={require('@/IMG/logo.png')} style={styles.headerLogo} resizeMode="contain" />
             <View style={styles.headerText}>
-              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>IUH EVENT · ADMIN</Text>
+              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
+                {user?.role === 'organizer' ? 'IUH EVENT · ĐƠN VỊ TỔ CHỨC' : 'IUH EVENT · ADMIN'}
+              </Text>
               <Text style={[styles.heading, { color: theme.color.val }]}>Quản lý sự kiện</Text>
               <Text style={[styles.subheading, { color: theme.muted.val }]}>Tạo mới, cập nhật, công khai và lưu trữ sự kiện.</Text>
             </View>
@@ -227,8 +231,12 @@ export default function AdminEventsScreen() {
         <View style={styles.adminNav}>
           <View style={styles.adminNavItem}><AdminButton label="Thêm sự kiện" icon="add-circle-outline" onPress={() => router.push('/admin/events/new' as never)} /></View>
           <View style={styles.adminNavItem}><AdminButton label="Đơn vị tổ chức" icon="business-outline" variant="secondary" onPress={() => router.push('/admin/organizers' as never)} /></View>
-          <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
-          <View style={styles.adminNavItem}><AdminButton label="Thống kê báo cáo" icon="bar-chart-outline" variant="secondary" onPress={() => router.push('/admin/analytics' as never)} /></View>
+          {user?.role === 'admin' ? (
+            <>
+              <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
+              <View style={styles.adminNavItem}><AdminButton label="Thống kê báo cáo" icon="bar-chart-outline" variant="secondary" onPress={() => router.push('/admin/analytics' as never)} /></View>
+            </>
+          ) : null}
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Ionicons name="search" size={19} color={theme.muted.val} />

@@ -1,6 +1,6 @@
 import type { ObjectId, WithId } from 'mongodb';
 
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'organizer';
 export type UserStatus = 'active' | 'suspended';
 export type EventStatus = 'draft' | 'published' | 'archived';
 export type RegistrationStatus = 'registered' | 'cancelled' | 'checked-in';
@@ -13,11 +13,39 @@ export type UserDocument = {
   major: string;
   role: UserRole;
   status: UserStatus;
+  organizerId?: ObjectId;
+  organizerName?: string;
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type StoredUser = WithId<UserDocument>;
+
+export type OrganizerType = 'faculty' | 'union' | 'club' | 'center';
+
+export type OrganizerDocument = {
+  accountId: ObjectId;
+  name: string;
+  shortName: string;
+  type: OrganizerType;
+  description: string;
+  contactEmail: string;
+  location: string;
+  color: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type PublicOrganizer = {
+  id: string;
+  name: string;
+  shortName: string;
+  type: OrganizerType;
+  description: string;
+  contactEmail: string;
+  location: string;
+  color: string;
+};
 
 export type EventDocument = {
   id: string;
@@ -90,7 +118,22 @@ export type PublicUser = {
   major: string;
   role: UserRole;
   status: UserStatus;
+  organizerId?: string;
+  organizerName?: string;
 };
+
+export function toPublicOrganizer(organizer: WithId<OrganizerDocument>): PublicOrganizer {
+  return {
+    id: organizer._id.toHexString(),
+    name: organizer.name,
+    shortName: organizer.shortName,
+    type: organizer.type,
+    description: organizer.description,
+    contactEmail: organizer.contactEmail,
+    location: organizer.location,
+    color: organizer.color,
+  };
+}
 
 export type PublicEvent = {
   id: string;
@@ -117,6 +160,8 @@ export function toPublicUser(user: StoredUser): PublicUser {
     major: user.major,
     role: user.role,
     status: user.status,
+    ...(user.organizerId ? { organizerId: user.organizerId.toHexString() } : {}),
+    ...(user.organizerName ? { organizerName: user.organizerName } : {}),
   };
 }
 

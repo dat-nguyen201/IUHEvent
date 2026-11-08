@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { Screen } from '@/components/Screen';
+import { useAuth } from '@/context/AuthContext';
 import { getAdminAnalytics, type AnalyticsSummary } from '@/services/adminAnalyticsService';
 import { getOrganizerLogo } from '@/data/organizers';
 
@@ -26,6 +27,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function AdminAnalyticsScreen() {
+  const { user } = useAuth();
   const theme = useTheme();
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +56,29 @@ export default function AdminAnalyticsScreen() {
       void loadData();
     }, [loadData]),
   );
+
+  if (user?.role !== 'admin') {
+    return (
+      <Screen>
+        <View style={{ flex: 1, padding: 20, gap: 16 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/admin/events' as never)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 }}
+          >
+            <Ionicons name="arrow-back" size={18} color={theme.color.val} />
+            <Text style={{ color: theme.color.val, fontWeight: '800' }}>Quản lý sự kiện</Text>
+          </Pressable>
+          <View style={[styles.centerContainer, { minHeight: 250 }]}>
+            <Ionicons name="lock-closed-outline" size={48} color={theme.danger.val} />
+            <Text style={[styles.loadingText, { color: theme.danger.val, textAlign: 'center', marginTop: 12 }]}>
+              Bạn không có quyền truy cập chức năng Thống kê báo cáo. Chức năng này chỉ dành cho Quản trị viên hệ thống.
+            </Text>
+          </View>
+        </View>
+      </Screen>
+    );
+  }
 
   if (error && !data) {
     return (

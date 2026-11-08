@@ -8,11 +8,13 @@ import { HttpError } from './lib/errors';
 import { errorHandler } from './middleware/errors';
 import { createAdminAnalyticsRouter } from './routes/admin-analytics';
 import { createAdminEventsRouter } from './routes/admin-events';
+import { createAdminOrganizersRouter } from './routes/admin-organizers';
 import { createAdminUsersRouter } from './routes/admin-users';
 import { createAuthRouter } from './routes/auth';
 import { createEventsRouter } from './routes/events';
 import { createMeRouter } from './routes/me';
 import { createNotificationsRouter } from './routes/notifications';
+import { createOrganizersRouter } from './routes/organizers';
 
 const defaultOrigins = ['http://localhost:8081', 'http://localhost:8084', 'http://127.0.0.1:8081', 'http://127.0.0.1:8084'];
 
@@ -54,9 +56,11 @@ export function createApp(db: Db) {
 
   app.use('/api/auth', createAuthRouter(db));
   app.use('/api/events', createEventsRouter(db));
+  app.use('/api/organizers', createOrganizersRouter(db));
   app.use('/api/me', createMeRouter(db));
   app.use('/api/notifications', createNotificationsRouter(db));
   app.use('/api/admin/events', createAdminEventsRouter(db));
+  app.use('/api/admin/organizers', createAdminOrganizersRouter(db));
   app.use('/api/admin/users', createAdminUsersRouter(db));
   app.use('/api/admin/analytics', createAdminAnalyticsRouter(db));
 

@@ -35,8 +35,10 @@ function parseUser(value: unknown): AuthUser {
     typeof user.studentId !== "string" ||
     typeof user.email !== "string" ||
     typeof user.major !== "string" ||
-    (role !== "student" && role !== "admin") ||
-    (status !== "active" && status !== "suspended")
+    (role !== "student" && role !== "admin" && role !== "organizer") ||
+    (status !== "active" && status !== "suspended") ||
+    (user.organizerId !== undefined && typeof user.organizerId !== "string") ||
+    (user.organizerName !== undefined && typeof user.organizerName !== "string")
   ) {
     throw new ApiError(
       "INVALID_RESPONSE",
@@ -52,6 +54,8 @@ function parseUser(value: unknown): AuthUser {
     major: user.major,
     role: role as UserRole,
     status: status as UserStatus,
+    ...(typeof user.organizerId === "string" ? { organizerId: user.organizerId } : {}),
+    ...(typeof user.organizerName === "string" ? { organizerName: user.organizerName } : {}),
   };
 }
 

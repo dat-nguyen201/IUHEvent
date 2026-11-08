@@ -44,3 +44,11 @@ export const requireAdmin: RequestHandler = (req, _res, next) => {
   }
   next();
 };
+
+export const requireAdminOrOrganizer: RequestHandler = (req, _res, next) => {
+  if (req.authUser?.role !== 'admin' && req.authUser?.role !== 'organizer') {
+    next(forbidden());
+    return;
+  }
+  next();
+};

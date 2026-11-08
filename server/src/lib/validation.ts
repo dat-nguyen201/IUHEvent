@@ -20,6 +20,16 @@ export const profileSchema = z.object({
   major: z.string().trim().min(2).max(120).optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one profile field is required.');
 
+export const createOrganizerSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  shortName: z.string().trim().min(2).max(60),
+  type: z.enum(['faculty', 'union', 'club', 'center']),
+  description: z.string().trim().max(2000).default(''),
+  email: emailSchema,
+  location: z.string().trim().max(240).default(''),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#0D6EFD'),
+}).strict();
+
 const eventFields = {
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().min(1).max(8000),
@@ -35,6 +45,7 @@ const eventFields = {
 
 export const createEventSchema = z.object({
   ...eventFields,
+  organizer: eventFields.organizer.optional(),
   status: z.enum(['draft', 'published']).default('draft'),
 }).strict();
 

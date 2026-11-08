@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { registerSchema, profileSchema } from '../src/lib/validation';
+import { createEventSchema, createOrganizerSchema, registerSchema, profileSchema } from '../src/lib/validation';
 import { hashPassword, verifyPassword, signAccessToken, verifyAccessToken } from '../src/lib/security';
 
 process.env.JWT_SECRET = 'test-secret-that-is-long-enough-for-unit-tests';
@@ -33,4 +33,34 @@ test('profile updates cannot set a role and cannot be empty', () => {
   assert.throws(() => profileSchema.parse({ role: 'admin' }));
   assert.throws(() => profileSchema.parse({}));
   assert.deepEqual(profileSchema.parse({ major: 'Software Engineering' }), { major: 'Software Engineering' });
+});
+
+test('organizer creation validates the organization and account email together', () => {
+  const parsed = createOrganizerSchema.parse({
+    name: 'Câu lạc bộ Công nghệ',
+    shortName: 'CLB Công nghệ',
+    type: 'club',
+    email: 'CLB@IUH.EDU.VN',
+  });
+  assert.equal(parsed.email, 'clb@iuh.edu.vn');
+  assert.equal(parsed.description, '');
+  assert.throws(() => createOrganizerSchema.parse({
+    name: 'Câu lạc bộ Công nghệ',
+    shortName: 'CLB Công nghệ',
+    type: 'club',
+    email: 'clb@iuh.edu.vn',
+    role: 'admin',
+  }));
+});
+
+test('event creation may omit organizer so the server can apply the signed-in organizer identity', () => {
+  const parsed = createEventSchema.parse({
+    title: 'Sự kiện',
+    description: 'Mô tả',
+    startsAt: '2027-01-15T09:00:00.000Z',
+    location: 'IUH',
+    category: 'CLB',
+    capacity: 100,
+  });
+  assert.equal(parsed.organizer, undefined);
 });

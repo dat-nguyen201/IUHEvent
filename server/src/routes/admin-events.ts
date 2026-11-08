@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { ObjectId, type Db, type Filter } from 'mongodb';
 
-import { conflict, notFound } from '../lib/errors';
+import { badRequest, conflict, notFound } from '../lib/errors';
 import { createEventSchema, eventStatusSchema, updateEventSchema } from '../lib/validation';
-import { requireAdmin, requireAuth } from '../middleware/auth';
+import { requireAdminOrOrganizer, requireAuth } from '../middleware/auth';
 import { toPublicEvent, type EventDocument, type RegistrationDocument, type ReviewDocument, type UserDocument } from '../types/domain';
 
 function pageNumber(value: unknown, fallback: number, max: number) {
@@ -22,7 +22,7 @@ function newEventId() {
 export function createAdminEventsRouter(db: Db) {
   const router = Router();
   const events = db.collection<EventDocument>('events');
-  router.use(requireAuth(db), requireAdmin);
+  router.use(requireAuth(db), requireAdminOrOrganizer);
 
   router.get('/', async (req, res) => {
     const page = pageNumber(req.query.page, 1, 1_000_000);
@@ -72,9 +72,14 @@ export function createAdminEventsRouter(db: Db) {
 
   router.post('/', async (req, res) => {
     const input = createEventSchema.parse(req.body);
+    const organizer = req.authUser!.role === 'organizer'
+      ? req.authUser!.organizerName || req.authUser!.name
+      : input.organizer;
+    if (!organizer) throw badRequest('ORGANIZER_REQUIRED', 'Vui lòng chọn đơn vị tổ chức.');
     const now = new Date();
     const event: EventDocument = {
       ...input,
+      organizer,
       id: newEventId(),
       startsAt: new Date(input.startsAt),
       registeredCount: 0,
@@ -185,9 +190,10 @@ export function createAdminEventsRouter(db: Db) {
       throw conflict('CAPACITY_BELOW_REGISTRATIONS', 'Sức chứa không thể thấp hơn số lượt đăng ký hiện tại.');
     }
 
-    const { startsAt, ...otherUpdates } = input;
+    const { startsAt, organizer, ...otherUpdates } = input;
     const updates: Partial<EventDocument> = { ...otherUpdates, updatedAt: new Date() };
     if (startsAt) updates.startsAt = new Date(startsAt);
+    if (organizer && req.authUser!.role !== 'organizer') updates.organizer = organizer;
     await events.updateOne({ id: event.id }, { $set: updates });
     const updated = await events.findOne({ id: event.id });
     res.json({ data: toPublicEvent(updated!) });
