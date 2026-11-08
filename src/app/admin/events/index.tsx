@@ -234,9 +234,16 @@ export default function AdminEventsScreen() {
           {user?.role === 'admin' ? (
             <>
               <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
-              <View style={styles.adminNavItem}><AdminButton label="Thống kê báo cáo" icon="bar-chart-outline" variant="secondary" onPress={() => router.push('/admin/analytics' as never)} /></View>
             </>
           ) : null}
+          <View style={styles.adminNavItem}>
+            <AdminButton
+              label={user?.role === 'organizer' ? 'Thống kê đơn vị' : 'Thống kê báo cáo'}
+              icon="bar-chart-outline"
+              variant="secondary"
+              onPress={() => router.push('/admin/analytics' as never)}
+            />
+          </View>
         </View>
         <View style={[styles.search, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Ionicons name="search" size={19} color={theme.muted.val} />

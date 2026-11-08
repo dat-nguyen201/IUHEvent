@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import type { Db } from 'mongodb';
 
-import { requireAdmin, requireAuth } from '../middleware/auth';
-import type { EventDocument, ReviewDocument, UserDocument } from '../types/domain';
+import { notFound } from '../lib/errors';
+import { requireAdminOrOrganizer, requireAuth } from '../middleware/auth';
+import type { EventDocument, OrganizerDocument, ReviewDocument, UserDocument } from '../types/domain';
 
 export interface ReviewsAnalytics {
   totalReviews: number;
@@ -70,18 +71,29 @@ export interface AnalyticsSummary {
 export function createAdminAnalyticsRouter(db: Db) {
   const router = Router();
   const events = db.collection<EventDocument>('events');
+  const organizers = db.collection<OrganizerDocument>('organizers');
   const users = db.collection<UserDocument>('users');
   const reviews = db.collection<ReviewDocument>('reviews');
 
-  router.use(requireAuth(db), requireAdmin);
+  router.use(requireAuth(db), requireAdminOrOrganizer);
 
-  router.get('/', async (_req, res) => {
-    const [allEvents, allReviews, totalStudents, activeStudents] = await Promise.all([
-      events.find().toArray(),
-      reviews.find().sort({ createdAt: -1 }).toArray(),
-      users.countDocuments({ role: 'student' }),
-      users.countDocuments({ role: 'student', status: 'active' }),
+  router.get('/', async (req, res) => {
+    const user = req.authUser!;
+    const eventFilter: { organizer?: string } = {};
+    if (user.role === 'organizer') {
+      const organizer = await organizers.findOne({ accountId: user._id });
+      if (!organizer) throw notFound('ORGANIZER_NOT_FOUND', 'Tài khoản chưa được gắn với đơn vị tổ chức.');
+      eventFilter.organizer = organizer.name;
+    }
+
+    const allEvents = await events.find(eventFilter).toArray();
+    const eventIds = allEvents.map((event) => event.id);
+    const [allReviews, totalStudents, activeStudents] = await Promise.all([
+      reviews.find({ eventId: { $in: eventIds } }).sort({ createdAt: -1 }).toArray(),
+      user.role === 'admin' ? users.countDocuments({ role: 'student' }) : Promise.resolve(0),
+      user.role === 'admin' ? users.countDocuments({ role: 'student', status: 'active' }) : Promise.resolve(0),
     ]);
+    const useDemoReviewFallback = user.role === 'admin';
 
     let totalCapacity = 0;
     let totalRegistrations = 0;
@@ -161,7 +173,9 @@ export function createAdminAnalyticsRouter(db: Db) {
     // Reviews Analytics Computation
     const totalReviews = allReviews.length;
     const ratingSum = allReviews.reduce((sum, r) => sum + r.rating, 0);
-    const averageRating = totalReviews > 0 ? Number((ratingSum / totalReviews).toFixed(1)) : 4.8;
+    const averageRating = totalReviews > 0
+      ? Number((ratingSum / totalReviews).toFixed(1))
+      : useDemoReviewFallback ? 4.8 : 0;
 
     const starCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const tagCounts: Record<string, number> = {};
@@ -187,12 +201,16 @@ export function createAdminAnalyticsRouter(db: Db) {
     }
 
     const highStarCount = (starCounts[5] || 0) + (starCounts[4] || 0);
-    const satisfactionRate = totalReviews > 0 ? Math.round((highStarCount / totalReviews) * 100) : 95;
+    const satisfactionRate = totalReviews > 0
+      ? Math.round((highStarCount / totalReviews) * 100)
+      : useDemoReviewFallback ? 95 : 0;
 
     const distribution = [5, 4, 3, 2, 1].map((stars) => ({
       stars,
       count: starCounts[stars] || 0,
-      percentage: totalReviews > 0 ? Math.round(((starCounts[stars] || 0) / totalReviews) * 100) : stars === 5 ? 75 : stars === 4 ? 20 : 5,
+      percentage: totalReviews > 0
+        ? Math.round(((starCounts[stars] || 0) / totalReviews) * 100)
+        : useDemoReviewFallback ? stars === 5 ? 75 : stars === 4 ? 20 : 5 : 0,
     }));
 
     const topFeedbackTags = Object.entries(tagCounts)
@@ -200,7 +218,7 @@ export function createAdminAnalyticsRouter(db: Db) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    if (topFeedbackTags.length === 0) {
+    if (topFeedbackTags.length === 0 && useDemoReviewFallback) {
       topFeedbackTags.push(
         { tag: 'Nội dung bổ ích', count: 18 },
         { tag: 'Diễn giả nhiệt tình', count: 15 },
@@ -247,20 +265,20 @@ export function createAdminAnalyticsRouter(db: Db) {
     });
 
     const reviewsSummary: ReviewsAnalytics = {
-      totalReviews: Math.max(totalReviews, 24),
+      totalReviews: useDemoReviewFallback ? Math.max(totalReviews, 24) : totalReviews,
       averageRating,
       satisfactionRate,
       needsImprovementCount: needsImprovementEvents.length,
       distribution,
       topFeedbackTags,
-      topRatedEvents: topRatedEvents.length > 0 ? topRatedEvents : [
+      topRatedEvents: topRatedEvents.length > 0 ? topRatedEvents : useDemoReviewFallback ? [
         { id: 'event-1', title: 'Workshop React Native cho người mới', organizer: 'Khoa CNTT', rating: 4.9, count: 14 },
         { id: 'event-9', title: 'Sinh hoạt CLB Tiếng Anh', organizer: 'English Speaking Club', rating: 4.8, count: 10 },
-      ],
-      needsImprovementEvents: needsImprovementEvents.length > 0 ? needsImprovementEvents : [
+      ] : [],
+      needsImprovementEvents: needsImprovementEvents.length > 0 ? needsImprovementEvents : useDemoReviewFallback ? [
         { id: 'event-5', title: 'Đêm nhạc Acoustic tháng 10', organizer: 'CLB Guitar IUH', rating: 4.0, count: 4 },
-      ],
-      recentReviews: recentReviews.length > 0 ? recentReviews : [
+      ] : [],
+      recentReviews: recentReviews.length > 0 ? recentReviews : useDemoReviewFallback ? [
         {
           id: 'demo-rev-1',
           eventId: 'event-9',
@@ -283,7 +301,7 @@ export function createAdminAnalyticsRouter(db: Db) {
           tags: ['Cần cải thiện âm thanh'],
           createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
         },
-      ],
+      ] : [],
     };
 
     const response: AnalyticsSummary = {

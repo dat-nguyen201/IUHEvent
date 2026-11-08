@@ -15,7 +15,7 @@ import {
 
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/context/AuthContext';
-import { getAdminAnalytics, type AnalyticsSummary } from '@/services/adminAnalyticsService';
+import { getAdminAnalytics, getOrganizerAnalytics, type AnalyticsSummary } from '@/services/adminAnalyticsService';
 import { getOrganizerLogo } from '@/data/organizers';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -28,6 +28,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function AdminAnalyticsScreen() {
   const { user } = useAuth();
+  const isOrganizer = user?.role === 'organizer';
   const theme = useTheme();
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +41,7 @@ export default function AdminAnalyticsScreen() {
     else setIsLoading(true);
     setError(null);
     try {
-      const result = await getAdminAnalytics();
+      const result = isOrganizer ? await getOrganizerAnalytics() : await getAdminAnalytics();
       setData(result);
     } catch (err) {
       console.error(err);
@@ -49,7 +50,7 @@ export default function AdminAnalyticsScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [isOrganizer]);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,7 +58,7 @@ export default function AdminAnalyticsScreen() {
     }, [loadData]),
   );
 
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'organizer') {
     return (
       <Screen>
         <View style={{ flex: 1, padding: 20, gap: 16 }}>
@@ -72,7 +73,7 @@ export default function AdminAnalyticsScreen() {
           <View style={[styles.centerContainer, { minHeight: 250 }]}>
             <Ionicons name="lock-closed-outline" size={48} color={theme.danger.val} />
             <Text style={[styles.loadingText, { color: theme.danger.val, textAlign: 'center', marginTop: 12 }]}>
-              Bạn không có quyền truy cập chức năng Thống kê báo cáo. Chức năng này chỉ dành cho Quản trị viên hệ thống.
+              Bạn không có quyền truy cập chức năng Thống kê báo cáo.
             </Text>
           </View>
         </View>
@@ -136,7 +137,9 @@ export default function AdminAnalyticsScreen() {
           </Pressable>
           <View style={styles.headerText}>
             <Text style={[styles.eyebrow, { color: theme.primary.val }]}>BÁO CÁO & THỐNG KÊ</Text>
-            <Text style={[styles.heading, { color: theme.color.val }]}>Phân tích số liệu</Text>
+            <Text style={[styles.heading, { color: theme.color.val }]}>
+              {isOrganizer ? 'Thống kê đơn vị' : 'Phân tích số liệu'}
+            </Text>
           </View>
           <Pressable
             onPress={() => router.push('/(tabs)/profile')}
@@ -184,23 +187,25 @@ export default function AdminAnalyticsScreen() {
               Danh mục
             </Text>
           </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('organizers')}
-            style={[
-              styles.tabItem,
-              activeTab === 'organizers' && { backgroundColor: theme.primary.val },
-            ]}
-          >
-            <Text
+          {!isOrganizer && (
+            <Pressable
+              onPress={() => setActiveTab('organizers')}
               style={[
-                styles.tabText,
-                { color: activeTab === 'organizers' ? '#FFF' : theme.muted.val },
-                activeTab === 'organizers' && styles.tabTextActive,
+                styles.tabItem,
+                activeTab === 'organizers' && { backgroundColor: theme.primary.val },
               ]}
             >
-              Đơn vị
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: activeTab === 'organizers' ? '#FFF' : theme.muted.val },
+                  activeTab === 'organizers' && styles.tabTextActive,
+                ]}
+              >
+                Đơn vị
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={() => setActiveTab('reviews')}
             style={[
@@ -279,23 +284,25 @@ export default function AdminAnalyticsScreen() {
           </View>
 
           {/* Card 4: Students */}
-          <View style={[styles.kpiCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
-            <View style={styles.kpiTop}>
-              <View style={[styles.kpiIconWrap, { backgroundColor: '#F3ECFF' }]}>
-                <Ionicons name="people" size={18} color="#6F42C1" />
+          {!isOrganizer && (
+            <View style={[styles.kpiCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+              <View style={styles.kpiTop}>
+                <View style={[styles.kpiIconWrap, { backgroundColor: '#F3ECFF' }]}>
+                  <Ionicons name="people" size={18} color="#6F42C1" />
+                </View>
+                <Text style={[styles.kpiBadge, { backgroundColor: '#F3ECFF', color: '#6F42C1' }]}>
+                  {Math.round(((kpis?.activeStudents ?? 0) / Math.max(1, kpis?.totalStudents ?? 1)) * 100)}% active
+                </Text>
               </View>
-              <Text style={[styles.kpiBadge, { backgroundColor: '#F3ECFF', color: '#6F42C1' }]}>
-                {Math.round(((kpis?.activeStudents ?? 0) / Math.max(1, kpis?.totalStudents ?? 1)) * 100)}% active
-              </Text>
+              <Text style={[styles.kpiValue, { color: theme.color.val }]}>{kpis?.activeStudents ?? 0}</Text>
+              <Text style={[styles.kpiLabel, { color: theme.muted.val }]}>Sinh viên hoạt động</Text>
+              <View style={styles.kpiSubRow}>
+                <Text style={[styles.kpiSubText, { color: theme.muted.val }]}>
+                  Trên tổng {kpis?.totalStudents ?? 0} sinh viên
+                </Text>
+              </View>
             </View>
-            <Text style={[styles.kpiValue, { color: theme.color.val }]}>{kpis?.activeStudents ?? 0}</Text>
-            <Text style={[styles.kpiLabel, { color: theme.muted.val }]}>Sinh viên hoạt động</Text>
-            <View style={styles.kpiSubRow}>
-              <Text style={[styles.kpiSubText, { color: theme.muted.val }]}>
-                Trên tổng {kpis?.totalStudents ?? 0} sinh viên
-              </Text>
-            </View>
-          </View>
+          )}
         </View>
       )}
 
@@ -370,7 +377,7 @@ export default function AdminAnalyticsScreen() {
         )}
 
         {/* SECTION: Top Organizers Leaderboard */}
-        {(activeTab === 'overview' || activeTab === 'organizers') && (
+        {!isOrganizer && (activeTab === 'overview' || activeTab === 'organizers') && (
           <View style={[styles.sectionCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
             <View style={styles.sectionHeader}>
               <View>
