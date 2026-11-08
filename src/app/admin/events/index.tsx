@@ -34,6 +34,7 @@ import {
 } from "@/services/adminEventService";
 import type { AdminEvent, AdminEventStatus } from "@/types/admin-events";
 import { formatEventDate } from "@/utils/date";
+import { useAuth } from "@/context/AuthContext";
 
 const PAGE_SIZE = 10;
 const STATUSES = [
@@ -51,6 +52,7 @@ const SUCCESS_MESSAGES: Record<string, string> = {
 };
 
 export default function AdminEventsScreen() {
+  const { user } = useAuth();
   const theme = useTheme();
   const { feedback } = useLocalSearchParams<{ feedback?: string }>();
   const [items, setItems] = useState<AdminEvent[]>([]);
@@ -347,7 +349,10 @@ export default function AdminEventsScreen() {
             />
             <View style={styles.headerText}>
               <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
-                IUH EVENT · ADMIN
+              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
+                {user?.role === "organizer"
+                  ? "IUH EVENT · ĐƠN VỊ TỔ CHỨC"
+                  : "IUH EVENT · ADMIN"}
               </Text>
               <Text style={[styles.heading, { color: theme.color.val }]}>
                 Quản lý sự kiện
@@ -386,22 +391,26 @@ export default function AdminEventsScreen() {
               onPress={() => router.push("/admin/organizers" as never)}
             />
           </View>
-          <View style={styles.adminNavItem}>
-            <AdminButton
-              label="Quản lý sinh viên"
-              icon="people-outline"
-              variant="secondary"
-              onPress={() => router.push("/admin/users" as never)}
-            />
-          </View>
-          <View style={styles.adminNavItem}>
-            <AdminButton
-              label="Thống kê báo cáo"
-              icon="bar-chart-outline"
-              variant="secondary"
-              onPress={() => router.push("/admin/analytics" as never)}
-            />
-          </View>
+          {user?.role === "admin" ? (
+            <>
+              <View style={styles.adminNavItem}>
+                <AdminButton
+                  label="Quản lý sinh viên"
+                  icon="people-outline"
+                  variant="secondary"
+                  onPress={() => router.push("/admin/users" as never)}
+                />
+              </View>
+              <View style={styles.adminNavItem}>
+                <AdminButton
+                  label="Thống kê báo cáo"
+                  icon="bar-chart-outline"
+                  variant="secondary"
+                  onPress={() => router.push("/admin/analytics" as never)}
+                />
+              </View>
+            </>
+          ) : null}
         </View>
         <View
           style={[

@@ -16,6 +16,9 @@ const GET_STARTED_KEY = 'iuh-event-get-started-complete';
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = '123456789';
 const ADMIN_SESSION = 'admin-demo';
+const ORGANIZER_USERNAME = 'organizer';
+const ORGANIZER_PASSWORD = '123456789';
+const ORGANIZER_SESSION = 'organizer-demo';
 
 const adminUser: DemoUser = {
   id: 'admin',
@@ -25,6 +28,16 @@ const adminUser: DemoUser = {
   status: 'active',
   email: 'admin@iuh.edu.vn',
   major: 'Quản trị hệ thống',
+};
+
+const organizerUser: DemoUser = {
+  id: 'organizer',
+  name: 'Đơn vị Tổ chức Sự kiện',
+  studentId: 'ORG-001',
+  role: 'organizer',
+  status: 'active',
+  email: 'organizer@iuh.edu.vn',
+  major: 'Ban Tổ chức',
 };
 
 async function accountStorageKey(email: string) {
@@ -63,7 +76,7 @@ async function getAccount(email: string): Promise<StoredAccount | null> {
         studentId: user.studentId,
         email: user.email,
         major: user.major,
-        role: user.role === 'admin' ? 'admin' : 'student',
+        role: user.role === 'admin' ? 'admin' : user.role === 'organizer' ? 'organizer' : 'student',
         status: user.status === 'suspended' ? 'suspended' : 'active',
       },
     };
@@ -81,6 +94,7 @@ export async function getAuthSession() {
   const email = await getStoredValue(SESSION_KEY);
   if (!email) return null;
   if (email === ADMIN_SESSION) return adminUser;
+  if (email === ORGANIZER_SESSION) return organizerUser;
 
   const account = await getAccount(email);
   if (!account) {
@@ -122,6 +136,10 @@ export async function loginDemoAccount(emailInput: string, password: string) {
   if (email === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     await setStoredValue(SESSION_KEY, ADMIN_SESSION);
     return adminUser;
+  }
+  if (email === ORGANIZER_USERNAME && password === ORGANIZER_PASSWORD) {
+    await setStoredValue(SESSION_KEY, ORGANIZER_SESSION);
+    return organizerUser;
   }
 
   const account = await getAccount(email);

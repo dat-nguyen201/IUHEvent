@@ -10,6 +10,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 
 import { AdminButton, AdminNotice, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminWidgets';
 import { Screen } from '@/components/Screen';
+import { useAuth } from '@/context/AuthContext';
 import { createAdminEvent, getAdminEvent, getAdminEventError, updateAdminEvent } from '@/services/adminEventService';
 import { getAllOrganizers } from '@/services/organizerService';
 import type { Organizer } from '@/data/organizers';
@@ -21,9 +22,18 @@ import {
 } from '@/utils/adminEventValidation';
 
 export function AdminEventForm({ eventId }: { eventId?: string }) {
+  const { user } = useAuth();
   const theme = useTheme();
+  const isOrganizer = user?.role === 'organizer';
+  const defaultOrgName = user?.organizerName || user?.name || '';
   const [event, setEvent] = useState<AdminEvent | null>(null);
-  const [values, setValues] = useState<AdminEventFormValues>(() => getInitialEventValues());
+  const [values, setValues] = useState<AdminEventFormValues>(() => {
+    const initial = getInitialEventValues();
+    if (!eventId && user?.role === 'organizer' && defaultOrgName) {
+      initial.organizer = defaultOrgName;
+    }
+    return initial;
+  });
   const [errors, setErrors] = useState<AdminEventFormErrors>({});
   const [loading, setLoading] = useState(Boolean(eventId));
   const [loadError, setLoadError] = useState('');
@@ -48,8 +58,8 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
 
   useEffect(() => { void loadEvent(); }, [loadEvent]);
   useEffect(() => {
-    void getAllOrganizers().then(setAvailableOrganizers);
-  }, []);
+    void getAllOrganizers(user).then(setAvailableOrganizers);
+  }, [user]);
 
   const setField = useCallback(<K extends keyof AdminEventFormValues>(key: K, value: AdminEventFormValues[K]) => {
     setValues(current => ({ ...current, [key]: value }));
@@ -84,7 +94,11 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
 
   const save = async () => {
     if (busy) return;
-    const checked = validateAdminEventForm(values);
+    const submissionValues = {
+      ...values,
+      organizer: isOrganizer ? defaultOrgName : values.organizer,
+    };
+    const checked = validateAdminEventForm(submissionValues);
     setErrors(checked.errors);
     setSaveError('');
     if (!checked.input) { setSaveError('Vui lòng kiểm tra những trường được đánh dấu.'); return; }
@@ -97,11 +111,16 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
     finally { setBusy(false); }
   };
 
-  const fieldSpecs = useMemo(() => [
-    { key: 'title' as const, label: 'Tên sự kiện *', placeholder: 'Workshop phát triển ứng dụng' },
-    { key: 'location' as const, label: 'Địa điểm *', placeholder: 'Hội trường IUH' },
-    { key: 'organizer' as const, label: 'Đơn vị tổ chức *', placeholder: 'Đoàn thanh niên IUH' },
-  ], []);
+  const fieldSpecs = useMemo(() => {
+    const list: { key: keyof AdminEventFormValues; label: string; placeholder: string }[] = [
+      { key: 'title' as const, label: 'Tên sự kiện *', placeholder: 'Workshop phát triển ứng dụng' },
+      { key: 'location' as const, label: 'Địa điểm *', placeholder: 'Hội trường IUH' },
+    ];
+    if (!isOrganizer) {
+      list.push({ key: 'organizer' as const, label: 'Đơn vị tổ chức *', placeholder: 'Đoàn thanh niên IUH' });
+    }
+    return list;
+  }, [isOrganizer]);
 
   return (
     <Screen>
@@ -165,6 +184,18 @@ export function AdminEventForm({ eventId }: { eventId?: string }) {
                   ) : null}
                 </View>
               ))}
+              {isOrganizer ? (
+                <View style={[styles.orgLockNotice, { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}40` }]}>
+                  <Ionicons name="business" size={18} color={theme.primary.val} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[styles.orgLockLabel, { color: theme.muted.val }]}>Đơn vị tổ chức</Text>
+                    <Text style={[styles.orgLockValue, { color: theme.color.val }]}>{defaultOrgName}</Text>
+                  </View>
+                  <View style={[styles.orgLockBadge, { backgroundColor: theme.primary.val }]}>
+                    <Text style={styles.orgLockBadgeText}>Cố định</Text>
+                  </View>
+                </View>
+              ) : null}
               <EventInput label="Mô tả *" value={values.description} error={errors.description} onChange={text => setField('description', text)} disabled={busy} placeholder="Nội dung và mục đích sự kiện..." multiline />
               <Text style={[styles.label, { color: theme.color.val }]}>Danh mục *</Text>
               <View style={styles.categories}>
@@ -358,5 +389,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   suggestionChipText: { fontSize: 11.5, fontWeight: '600' },
+  orgLockNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginVertical: 4,
+  },
+  orgLockLabel: { fontSize: 11, fontWeight: '600' },
+  orgLockValue: { fontSize: 14, fontWeight: '800' },
+  orgLockBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  orgLockBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 8 },
 });

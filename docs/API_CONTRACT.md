@@ -7,7 +7,7 @@
 - Base URL là `EXPO_PUBLIC_API_URL`; ví dụ local `http://localhost:3000` hoặc IP LAN của máy chạy server khi thử trên điện thoại.
 - Request và response dùng JSON, UTF-8. Thời gian là ISO 8601 UTC.
 - Endpoint riêng tư yêu cầu `Authorization: Bearer <accessToken>`.
-- Các endpoint `/api/admin/**` yêu cầu user đang hoạt động có `role: "admin"`; backend lấy role từ database, không tin role do app gửi lên.
+- Các endpoint `/api/admin/**` yêu cầu user đang hoạt động. Riêng quản lý đơn vị và sự kiện cho phép role `admin` hoặc `organizer`; quyền của tài khoản organizer bị giới hạn theo đơn vị trên server.
 - Phân trang dùng `page` bắt đầu từ 1 và `pageSize`. Response danh sách có `{ data, total, page, pageSize, hasMore }`; `GET /api/events` có thể thêm `source: "remote"`.
 - Lỗi dùng thống nhất `{ "code": "STABLE_CODE", "message": "Mô tả dễ hiểu.", "details"?: [...] }`. Không bọc lỗi trong `error`.
 - Không bao giờ trả `password` hoặc `passwordHash`. Sinh viên không được tự đặt hoặc sửa `role`. Chỉ seed/quy trình quản trị phía backend được cấp quyền admin.
@@ -29,7 +29,8 @@
 }
 ```
 
-- `role`: `student | admin`.
+- `role`: `student | admin | organizer`.
+- Tài khoản organizer có thêm `organizerId` và `organizerName`; các trường này được cấp từ server và không thể tự sửa.
 - `status`: `active | suspended`.
 - User công khai không bao giờ chứa thông tin mật khẩu.
 
@@ -97,14 +98,24 @@ Mật khẩu mới dài 8–128 ký tự, phải khác mật khẩu hiện tại
 
 `query` tìm theo tiêu đề, địa điểm hoặc đơn vị tổ chức. Danh sách công khai chỉ trả sự kiện `published`; `upcomingOnly=true` lọc sự kiện chưa bắt đầu. Mặc định `page=1`, `pageSize=10`, tối đa 50.
 
+## Đơn vị tổ chức
+
+| Method và path | Quyền | Request | Response thành công |
+|---|---|---|---|
+| `GET /api/organizers` | Công khai | Không có | `200 { data: Organizer[] }` |
+| `GET /api/admin/organizers` | Admin: toàn bộ; organizer: chỉ đơn vị gắn với tài khoản | Không có | `200 { data: Organizer[] }` |
+| `POST /api/admin/organizers` | Admin đang hoạt động | `{ name, shortName, type, description, email, location, color }` | `201 { organizer, account: { user, email, initialPassword } }` |
+
+`type` nhận `faculty | union | club | center`. Tạo đơn vị đồng thời tạo tài khoản organizer và liên kết hai bản ghi; email đã được dùng bị từ chối (`EMAIL_EXISTS`). Mật khẩu ban đầu ngẫu nhiên chỉ trả về trong kết quả tạo. Organizer không thể tạo đơn vị hoặc xem các đơn vị khác qua endpoint quản lý.
+
 ## Quản trị sự kiện
 
-Tất cả endpoint dưới đây yêu cầu admin đang hoạt động.
+Các endpoint dưới đây yêu cầu admin hoặc organizer đang hoạt động. Organizer chỉ được tạo sự kiện với đơn vị được gắn trong tài khoản; server tự áp dụng `organizerName` và bỏ qua tên đơn vị gửi kèm. Admin phải gửi `organizer`.
 
 | Method và path | Request | Response thành công |
 |---|---|---|
 | `GET /api/admin/events` | Query tùy chọn: `page`, `pageSize`, `query`, `status` | `200 { data: Event[], total, page, pageSize, hasMore }` |
-| `POST /api/admin/events` | Các trường tạo event: `title`, `description`, `startsAt`, `location`, `category`, `organizer`, `capacity`; tùy chọn `summarySource`, `imageKey`, `imageUrl`, `status` | `201 { data: Event }`; mặc định status `draft` |
+| `POST /api/admin/events` | Các trường tạo event: `title`, `description`, `startsAt`, `location`, `category`, `capacity`; `organizer` bắt buộc với admin, tùy chọn với organizer; tùy chọn `summarySource`, `imageKey`, `imageUrl`, `status` | `201 { data: Event }`; mặc định status `draft` |
 | `GET /api/admin/events/:eventId` | Không có | `200 { data: Event }` |
 | `PATCH /api/admin/events/:eventId` | Một hoặc nhiều trường event có thể sửa, không gồm `id`, số lượt đăng ký/check-in | `200 { data: Event }` |
 | `PATCH /api/admin/events/:eventId/status` | `{ "status": "draft" | "published" | "archived" }` | `200 { data: Event }` |

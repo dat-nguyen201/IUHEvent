@@ -8,9 +8,11 @@ import { AdminButton, AdminConfirmDialog, AdminNotice, AdminPanel } from '@/comp
 import { Screen } from '@/components/Screen';
 import { getAdminUserError, listAdminUsers, setAdminUserStatus } from '@/services/adminUserService';
 import type { AuthUser, UserStatus } from '@/types/auth';
+import { useAuth } from '@/context/AuthContext';
 
 const PAGE_SIZE = 10;
 export default function AdminUsersScreen() {
+  const { user } = useAuth();
   const theme = useTheme();
   const [items, setItems] = useState<AuthUser[]>([]);
   const [query, setQuery] = useState('');
@@ -59,6 +61,20 @@ export default function AdminUsersScreen() {
     finally { setBusy(false); }
   };
 
+  if (user?.role !== 'admin') {
+    return (
+      <Screen>
+        <View style={styles.root}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/admin/events' as never)} style={styles.link}>
+            <Ionicons name="arrow-back" size={18} color={theme.color.val} />
+            <Text style={{ color: theme.color.val, fontWeight: '800' }}>Quản lý sự kiện</Text>
+          </Pressable>
+          <AdminNotice>Bạn không có quyền truy cập chức năng Quản lý sinh viên. Chức năng này chỉ dành cho Quản trị viên hệ thống.</AdminNotice>
+        </View>
+      </Screen>
+    );
+  }
+
   return <Screen>
     <View style={styles.root}>
       <Pressable accessibilityRole="button" onPress={() => router.push('/admin/events' as never)} style={styles.link}><Ionicons name="arrow-back" size={18} color={theme.color.val} /><Text style={{ color: theme.color.val, fontWeight: '800' }}>Quản trị sự kiện</Text></Pressable>
@@ -75,7 +91,7 @@ export default function AdminUsersScreen() {
       {loading && !refreshing ? <ActivityIndicator style={{ marginTop: 28 }} size="large" color={theme.primary.val} /> : error ? <View style={styles.message}><AdminNotice>{error}</AdminNotice><AdminButton label="Thử lại" onPress={() => void load()} /></View> :
         <FlatList data={items} keyExtractor={item => item.id} contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={theme.primary.val} />} renderItem={({ item }) => <AdminPanel>
           <View style={styles.identity}><Text style={[styles.name, { color: theme.color.val }]}>{item.name}</Text><View style={[styles.badge, { backgroundColor: item.status === 'active' ? '#D1FAE5' : '#FEE2E2' }]}><Text style={{ color: item.status === 'active' ? '#065F46' : '#B91C1C', fontSize: 11, fontWeight: '800' }}>{item.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</Text></View></View>
-          <Text style={[styles.meta, { color: theme.muted.val }]}>{item.studentId} · {item.role === 'admin' ? 'Admin' : 'Sinh viên'}</Text>
+          <Text style={[styles.meta, { color: theme.muted.val }]}>{item.studentId} · {item.role === 'admin' ? 'Admin' : item.role === 'organizer' ? 'Đơn vị tổ chức' : 'Sinh viên'}</Text>
           <Text style={[styles.meta, { color: theme.muted.val }]}>{item.email}</Text>
           <Text style={[styles.meta, { color: theme.muted.val }]}>{item.major || 'Chưa khai báo ngành'}</Text>
           <View style={styles.actions}><AdminButton label="Chi tiết / sửa" compact icon="create-outline" variant="secondary" onPress={() => router.push({ pathname: '/admin/users/[id]', params: { id: item.id } } as never)} /><AdminButton label={item.status === 'active' ? 'Khóa' : 'Mở khóa'} compact variant={item.status === 'active' ? 'danger' : 'primary'} onPress={() => setPending(item)} /></View>

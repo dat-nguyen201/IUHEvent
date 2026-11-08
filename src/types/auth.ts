@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'organizer';
 export type UserStatus = 'active' | 'suspended';
 
 export type AuthUser = {
@@ -9,6 +9,8 @@ export type AuthUser = {
   major: string;
   role: UserRole;
   status: UserStatus;
+  organizerId?: string;
+  organizerName?: string;
 };
 
 export type RegisterInput = {

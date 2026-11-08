@@ -2,6 +2,7 @@ import { appMode } from "@/constants/app-mode";
 import { ApiError, apiRequest } from "@/services/apiClient";
 import { getRemoteAccessToken } from "@/services/remoteAuthService";
 import type { AuthUser, UserStatus } from "@/types/auth";
+import type { OrganizerType } from "@/data/organizers";
 
 export type AdminUsersPage = {
   data: AuthUser[];
@@ -11,6 +12,16 @@ export type AdminUsersPage = {
   hasMore: boolean;
 };
 type AdminUserProfile = { name: string; studentId: string; major: string };
+export type AdminOrganizerRecord = {
+  id: string;
+  name: string;
+  shortName: string;
+  type: OrganizerType;
+  description: string;
+  contactEmail: string;
+  location: string;
+  color: string;
+};
 
 async function token() {
   if (appMode !== "remote")
@@ -79,6 +90,37 @@ export async function setAdminUserStatus(id: string, status: UserStatus) {
 
 export const updateAdminUserStatus = setAdminUserStatus;
 
+export async function createAdminOrganizerAccount(input: {
+  name: string;
+  shortName: string;
+  type: OrganizerType;
+  description: string;
+  email: string;
+  location: string;
+  color: string;
+}): Promise<{
+  organizer: AdminOrganizerRecord;
+  account: { user: AuthUser; email: string; initialPassword: string };
+}> {
+  return apiRequest<{
+    organizer: AdminOrganizerRecord;
+    account: { user: AuthUser; email: string; initialPassword: string };
+  }>(
+    "/api/admin/organizers",
+    {
+      method: "POST",
+      body: input,
+      token: await token(),
+    },
+  );
+}
+
+export async function listAdminOrganizers(): Promise<{ data: AdminOrganizerRecord[] }> {
+  return apiRequest<{ data: AdminOrganizerRecord[] }>("/api/admin/organizers", {
+    token: await token(),
+  });
+}
+
 export function getAdminUserError(error: unknown) {
   if (error instanceof ApiError) {
     const labels: Record<string, string> = {
@@ -87,6 +129,7 @@ export function getAdminUserError(error: unknown) {
       ACCOUNT_SUSPENDED: "Tài khoản đã bị khóa.",
       USER_NOT_FOUND: "Không tìm thấy người dùng.",
       STUDENT_ID_EXISTS: "Mã sinh viên đã được sử dụng.",
+      EMAIL_EXISTS: "Email này đã thuộc về tài khoản khác.",
       CANNOT_SUSPEND_SELF: "Không thể tự khóa tài khoản admin đang đăng nhập.",
       LAST_ACTIVE_ADMIN: "Không thể khóa tài khoản admin hoạt động cuối cùng.",
       VALIDATION_ERROR: "Thông tin chưa hợp lệ.",

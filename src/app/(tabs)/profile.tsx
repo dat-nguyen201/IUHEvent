@@ -184,9 +184,11 @@ export default function ProfileScreen() {
                   ? appMode === "demo"
                     ? "Admin demo"
                     : "Admin"
-                  : "Sinh viên"
+                  : user?.role === "organizer"
+                    ? "Đơn vị tổ chức"
+                    : "Sinh viên"
               }
-              tone="success"
+              tone={user?.role === "admin" ? "success" : "neutral"}
             />
           </View>
           <View
@@ -226,16 +228,20 @@ export default function ProfileScreen() {
         </Pressable>
 
         {appMode === "remote" &&
-        user?.role === "admin" &&
+        (user?.role === "admin" || user?.role === "organizer") &&
         user.status === "active" ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push("/admin/events" as never)}
             style={[styles.adminAccess, { backgroundColor: theme.primary.val }]}
           >
-            <Text style={styles.adminAccessTitle}>Quản trị sự kiện IUH</Text>
+            <Text style={styles.adminAccessTitle}>
+              {user.role === "admin" ? "Quản trị sự kiện IUH" : "Quản lý sự kiện dành cho ĐVTC"}
+            </Text>
             <Text style={styles.adminAccessCaption}>
-              Quản lý sự kiện và tài khoản sinh viên →
+              {user.role === "admin"
+                ? "Quản lý sự kiện và tài khoản sinh viên →"
+                : "Tạo, cập nhật và quản lý sự kiện của đơn vị →"}
             </Text>
           </Pressable>
         ) : null}

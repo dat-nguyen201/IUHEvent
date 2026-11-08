@@ -40,8 +40,11 @@ export default function AuthScreen() {
   const submit = async () => {
     setError('');
     const normalizedEmail = email.trim();
-    const isDemoAdminLogin = appMode === 'demo' && mode === 'login' && normalizedEmail.toLowerCase() === 'admin';
-    if (!isDemoAdminLogin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    const isDemoPrivilegedLogin =
+      appMode === 'demo' &&
+      mode === 'login' &&
+      (normalizedEmail.toLowerCase() === 'admin' || normalizedEmail.toLowerCase() === 'organizer');
+    if (!isDemoPrivilegedLogin && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setError('Vui lòng nhập địa chỉ email hợp lệ.');
       return;
     }

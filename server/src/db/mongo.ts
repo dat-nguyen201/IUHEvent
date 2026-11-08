@@ -23,6 +23,7 @@ export async function ensureIndexes(db: Db) {
     db.collection('users').createIndex({ email: 1 }, { unique: true, name: 'users_email_unique' }),
     db.collection('users').createIndex({ studentId: 1 }, { unique: true, name: 'users_student_id_unique' }),
     db.collection('users').createIndex({ role: 1, status: 1 }),
+    db.collection('organizers').createIndex({ accountId: 1 }, { unique: true, name: 'organizers_account_unique' }),
     db.collection('events').createIndex({ id: 1 }, { unique: true, name: 'events_public_id_unique' }),
     db.collection('events').createIndex({ status: 1, startsAt: 1 }),
     db.collection('events').createIndex({ title: 'text', location: 'text' }, { name: 'events_search_text' }),

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Screen } from '@/components/Screen';
+import { useAuth } from '@/context/AuthContext';
 import type { Organizer, OrganizerType } from '@/data/organizers';
 import {
   createOrganizer,
@@ -24,6 +25,7 @@ import {
   getAllOrganizers,
   type CreateOrganizerInput,
 } from '@/services/organizerService';
+import { getAdminUserError } from '@/services/adminUserService';
 
 const TYPE_OPTIONS: { value: OrganizerType; label: string }[] = [
   { value: 'faculty', label: 'Khoa chuyên ngành' },
@@ -33,6 +35,8 @@ const TYPE_OPTIONS: { value: OrganizerType; label: string }[] = [
 ];
 
 export default function AdminOrganizersScreen() {
+  const { user } = useAuth();
+  const isOrganizer = user?.role === 'organizer';
   const theme = useTheme();
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [query, setQuery] = useState('');
@@ -42,6 +46,8 @@ export default function AdminOrganizersScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [createdAccount, setCreatedAccount] = useState<{ email: string; password: string } | null>(null);
 
   // Form fields
   const [name, setName] = useState('');
@@ -54,16 +60,18 @@ export default function AdminOrganizersScreen() {
   const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
     else setIsLoading(true);
+    setLoadError('');
     try {
-      const list = await getAllOrganizers();
+      const list = await getAllOrganizers(user);
       setOrganizers(list);
     } catch (e) {
       console.warn('Cannot load organizers:', e);
+      setLoadError(getAdminUserError(e));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,6 +80,7 @@ export default function AdminOrganizersScreen() {
   );
 
   const handleCreate = async () => {
+    if (isOrganizer) return;
     if (!name.trim()) {
       setFormError('Vui lòng nhập tên đơn vị tổ chức.');
       return;
@@ -88,17 +97,18 @@ export default function AdminOrganizersScreen() {
         location: location.trim(),
         color: type === 'faculty' ? '#0D6EFD' : type === 'union' ? '#DC3545' : type === 'club' ? '#FD7E14' : '#20C997',
       };
-      await createOrganizer(input);
+      const result = await createOrganizer(input);
       setName('');
       setShortName('');
       setDescription('');
       setEmail('');
       setLocation('');
       setModalVisible(false);
+      setCreatedAccount(result.account);
       await loadData();
     } catch (e) {
       console.warn(e);
-      setFormError('Không thể tạo đơn vị. Vui lòng thử lại.');
+      setFormError(getAdminUserError(e));
     } finally {
       setIsSubmitting(false);
     }
@@ -137,22 +147,24 @@ export default function AdminOrganizersScreen() {
             <Ionicons name="arrow-back" size={20} color={theme.color.val} />
           </Pressable>
           <View style={styles.headerText}>
-            <Text style={[styles.eyebrow, { color: theme.primary.val }]}>QUẢN TRỊ IUH</Text>
-            <Text style={[styles.heading, { color: theme.color.val }]}>Đơn vị tổ chức</Text>
+            <Text style={[styles.eyebrow, { color: theme.primary.val }]}>{isOrganizer ? 'TÀI KHOẢN ĐƠN VỊ' : 'QUẢN TRỊ IUH'}</Text>
+            <Text style={[styles.heading, { color: theme.color.val }]}>{isOrganizer ? 'Đơn vị của tôi' : 'Đơn vị tổ chức'}</Text>
           </View>
-          <Pressable
-            onPress={() => setModalVisible(true)}
-            style={[styles.addBtn, { backgroundColor: theme.primary.val }]}
-            accessibilityRole="button"
-            accessibilityLabel="Thêm đơn vị"
-          >
-            <Ionicons name="add" size={20} color="#FFF" />
-            <Text style={styles.addBtnText}>Thêm mới</Text>
-          </Pressable>
+          {!isOrganizer ? (
+            <Pressable
+              onPress={() => setModalVisible(true)}
+              style={[styles.addBtn, { backgroundColor: theme.primary.val }]}
+              accessibilityRole="button"
+              accessibilityLabel="Thêm đơn vị"
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+              <Text style={styles.addBtnText}>Thêm mới</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Search */}
-        <View style={[styles.searchBox, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+        {!isOrganizer ? <View style={[styles.searchBox, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
           <Ionicons name="search" size={18} color={theme.muted.val} />
           <TextInput
             placeholder="Tìm tên đơn vị, từ viết tắt..."
@@ -166,10 +178,10 @@ export default function AdminOrganizersScreen() {
               <Ionicons name="close-circle" size={18} color={theme.muted.val} />
             </Pressable>
           ) : null}
-        </View>
+        </View> : null}
 
         {/* Filter Type Pills */}
-        <View style={styles.typesRow}>
+        {!isOrganizer ? <View style={styles.typesRow}>
           <Pressable
             onPress={() => setSelectedType('all')}
             style={[
@@ -197,7 +209,8 @@ export default function AdminOrganizersScreen() {
               </Text>
             </Pressable>
           ))}
-        </View>
+        </View> : null}
+        {loadError ? <Text style={styles.formErrorText}>{loadError}</Text> : null}
 
         {/* Organizers List */}
         {isLoading && organizers.length === 0 ? (
@@ -227,7 +240,8 @@ export default function AdminOrganizersScreen() {
               </View>
             }
             renderItem={({ item }) => {
-              const isCustom = item.id.startsWith('org-custom-');
+              const isCustom = !isOrganizer && item.id.startsWith('org-custom-');
+              const isRemote = /^[a-f\d]{24}$/i.test(item.id);
               return (
                 <View
                   style={[
@@ -263,11 +277,11 @@ export default function AdminOrganizersScreen() {
                       >
                         <Ionicons name="trash-outline" size={18} color="#DC3545" />
                       </Pressable>
-                    ) : (
+                    ) : !isOrganizer && !isRemote ? (
                       <View style={styles.systemBadge}>
                         <Text style={styles.systemBadgeText}>Hệ thống</Text>
                       </View>
-                    )}
+                    ) : null}
                   </View>
 
                   <Text numberOfLines={2} style={[styles.desc, { color: theme.muted.val }]}>
@@ -370,9 +384,9 @@ export default function AdminOrganizersScreen() {
                   ))}
                 </View>
 
-                <Text style={[styles.inputLabel, { color: theme.color.val }]}>Email liên hệ</Text>
+                <Text style={[styles.inputLabel, { color: theme.color.val }]}>Email tài khoản / liên hệ</Text>
                 <TextInput
-                  placeholder="Ví dụ: qtkd@iuh.edu.vn"
+                  placeholder="Để trống để tự tạo email theo tên đơn vị"
                   placeholderTextColor={theme.muted.val}
                   value={email}
                   onChangeText={setEmail}
@@ -424,6 +438,28 @@ export default function AdminOrganizersScreen() {
                   </Pressable>
                 </View>
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          visible={Boolean(createdAccount)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCreatedAccount(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+              <Text style={[styles.modalTitle, { color: theme.color.val }]}>Tài khoản đơn vị đã được tạo</Text>
+              <Text style={[styles.desc, { color: theme.muted.val }]}>Hãy lưu thông tin đăng nhập này và gửi cho đơn vị. Mật khẩu sẽ không hiển thị lại.</Text>
+              <Text selectable style={[styles.credential, { color: theme.color.val }]}>Email: {createdAccount?.email}</Text>
+              <Text selectable style={[styles.credential, { color: theme.color.val }]}>Mật khẩu ban đầu: {createdAccount?.password}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setCreatedAccount(null)}
+                style={[styles.credentialDismissButton, { backgroundColor: theme.primary.val }]}
+              >
+                <Text style={styles.credentialDismissText}>Đã lưu thông tin</Text>
+              </Pressable>
             </View>
           </View>
         </Modal>
@@ -481,6 +517,11 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+  credential: {
+    marginTop: 12,
+    fontSize: 15,
+    fontWeight: '700',
   },
   searchBox: {
     flexDirection: 'row',
@@ -716,5 +757,20 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  credentialDismissButton: {
+    alignSelf: 'stretch',
+    minHeight: 48,
+    marginTop: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  credentialDismissText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });

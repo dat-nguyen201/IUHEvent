@@ -106,7 +106,7 @@ function RouteGuard() {
     } else if (
       user &&
       route === "admin" &&
-      (mode !== "remote" || user.role !== "admin" || user.status !== "active")
+      (mode !== "remote" || (user.role !== "admin" && user.role !== "organizer") || user.status !== "active")
     ) {
       router.replace("/(tabs)");
     } else if (user && isProtectedRoute && !hasSeenGetStarted) {

@@ -8,6 +8,7 @@
     "start": "node dist/src/index.js",
     "seed:events": "tsx src/scripts/seed-events.ts",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
+    "seed:organizer": "tsx src/scripts/seed-organizer.ts",
     "test": "tsx test/security.test.ts"
   },
   "dependencies": {

@@ -13,7 +13,8 @@ export default function AdminLayout() {
     return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background.val }}><ActivityIndicator size="large" color={theme.primary.val} /></View>;
   }
   if (!user) return <Redirect href="/auth" />;
-  if (mode !== 'remote' || user.role !== 'admin' || user.status !== 'active') {
+  const canAccessAdmin = user.role === 'admin' || user.role === 'organizer';
+  if (mode !== 'remote' || !canAccessAdmin || user.status !== 'active') {
     return <Redirect href="/(tabs)" />;
   }
 
