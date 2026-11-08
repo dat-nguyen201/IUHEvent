@@ -39,6 +39,7 @@ import { useTheme } from "@tamagui/core";
 import { useAppTheme } from "@/context/ThemeContext";
 import { getAvatarUri } from "@/services/avatarStorage";
 import { fetchUnreadNotificationCount } from "@/services/notificationService";
+import { fetchLeaderboard, type LeaderboardStudent } from "@/services/leaderboardService";
 
 export interface RecommendedEvent extends StudentEvent {
   recommendationReason: string;
@@ -80,6 +81,7 @@ export default function HomeScreen() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [topStudents, setTopStudents] = useState<LeaderboardStudent[]>([]);
 
   const loadHomeData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -91,6 +93,7 @@ export default function HomeScreen() {
     try {
       if (appMode === "remote") invalidateEventsCache();
       void getAllOrganizers().then(setOrganizerList);
+      void fetchLeaderboard().then(res => setTopStudents(res.topStudents.slice(0, 3)));
       const result = await getEvents({ page: 1, pageSize: 100 });
       setAllEvents(result.items);
       const futureEvents = result.items
@@ -607,6 +610,137 @@ export default function HomeScreen() {
             </Text>
           </View>
         )}
+
+        {/* Vinh danh Top 3 Sinh viên Xuất sắc (Leaderboard Spotlight) */}
+        <View style={styles.sectionHeading}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 18 }}>🏆</Text>
+              <Text style={[styles.sectionTitle, { color: theme.color.val }]}>
+                Vinh danh Rèn luyện
+              </Text>
+              <View style={styles.liveTagPill}>
+                <Text style={styles.liveTagText}>LIVE</Text>
+              </View>
+            </View>
+            <Text style={[styles.sectionHint, { color: theme.muted.val }]}>
+              Top 3 sinh viên dẫn đầu phong trào tích lũy ĐRL
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push("/leaderboard" as any)}
+            hitSlop={8}
+          >
+            <Text style={[styles.link, { color: theme.primary.val }]}>
+              Xem tất cả →
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Podium Top 3 Spotlight Widget */}
+        <Pressable
+          onPress={() => router.push("/leaderboard" as any)}
+          style={[
+            styles.podiumWidgetContainer,
+            { backgroundColor: theme.surface.val, borderColor: theme.border.val },
+          ]}
+        >
+          <LinearGradient
+            colors={["#0F2557", "#1E3A8A"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.podiumWidgetGradient}
+          >
+            <View style={styles.podiumWidgetRow}>
+              {/* Rank 2 - Silver */}
+              <View style={[styles.podiumSpotCol, styles.spotRank2]}>
+                <Text style={styles.spotMedalIcon}>🥈</Text>
+                <View style={[styles.spotAvatarCircle, { borderColor: "#E2E8F0" }]}>
+                  <Text style={styles.spotAvatarText}>
+                    {topStudents[1]?.name
+                      ? topStudents[1].name.charAt(topStudents[1].name.lastIndexOf(" ") + 1) || topStudents[1].name.charAt(0)
+                      : "2"}
+                  </Text>
+                </View>
+                <Text style={styles.spotStudentName} numberOfLines={1}>
+                  {topStudents[1]?.name || "Đang cập nhật"}
+                </Text>
+                <Text style={styles.spotStudentMajor} numberOfLines={1}>
+                  {topStudents[1]?.major || "Khoa"}
+                </Text>
+                <View style={styles.spotScorePill}>
+                  <Text style={styles.spotScoreText}>
+                    {topStudents[1]?.drlPoints ?? 95}đ ĐRL
+                  </Text>
+                </View>
+                <View style={[styles.spotStandBlock, styles.standBlock2]}>
+                  <Text style={styles.standBlockNum}>2</Text>
+                </View>
+              </View>
+
+              {/* Rank 1 - Gold (Highest in Center) */}
+              <View style={[styles.podiumSpotCol, styles.spotRank1]}>
+                <Text style={[styles.spotMedalIcon, { fontSize: 26 }]}>👑</Text>
+                <View style={[styles.spotAvatarCircle, styles.spotAvatarRank1]}>
+                  <Text style={[styles.spotAvatarText, { fontSize: 20 }]}>
+                    {topStudents[0]?.name
+                      ? topStudents[0].name.charAt(topStudents[0].name.lastIndexOf(" ") + 1) || topStudents[0].name.charAt(0)
+                      : "1"}
+                  </Text>
+                </View>
+                <Text style={[styles.spotStudentName, { fontWeight: "900", fontSize: 13 }]} numberOfLines={1}>
+                  {topStudents[0]?.name || "Đang cập nhật"}
+                </Text>
+                <Text style={styles.spotStudentMajor} numberOfLines={1}>
+                  {topStudents[0]?.major || "Khoa"}
+                </Text>
+                <View style={[styles.spotScorePill, { backgroundColor: "#F59E0B" }]}>
+                  <Text style={[styles.spotScoreText, { color: "#FFFFFF" }]}>
+                    {topStudents[0]?.drlPoints ?? 100}đ ĐRL
+                  </Text>
+                </View>
+                <View style={[styles.spotStandBlock, styles.standBlock1]}>
+                  <Text style={[styles.standBlockNum, { fontSize: 18 }]}>1</Text>
+                </View>
+              </View>
+
+              {/* Rank 3 - Bronze */}
+              <View style={[styles.podiumSpotCol, styles.spotRank3]}>
+                <Text style={styles.spotMedalIcon}>🥉</Text>
+                <View style={[styles.spotAvatarCircle, { borderColor: "#EA580C" }]}>
+                  <Text style={styles.spotAvatarText}>
+                    {topStudents[2]?.name
+                      ? topStudents[2].name.charAt(topStudents[2].name.lastIndexOf(" ") + 1) || topStudents[2].name.charAt(0)
+                      : "3"}
+                  </Text>
+                </View>
+                <Text style={styles.spotStudentName} numberOfLines={1}>
+                  {topStudents[2]?.name || "Đang cập nhật"}
+                </Text>
+                <Text style={styles.spotStudentMajor} numberOfLines={1}>
+                  {topStudents[2]?.major || "Khoa"}
+                </Text>
+                <View style={styles.spotScorePill}>
+                  <Text style={styles.spotScoreText}>
+                    {topStudents[2]?.drlPoints ?? 90}đ ĐRL
+                  </Text>
+                </View>
+                <View style={[styles.spotStandBlock, styles.standBlock3]}>
+                  <Text style={styles.standBlockNum}>3</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Tap to View Full Leaderboard Prompt */}
+            <View style={styles.spotFooterPrompt}>
+              <Text style={styles.spotFooterPromptText}>
+                Xem đầy đủ Top 30 & Điểm thi đua các Khoa IUH
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#93C5FD" />
+            </View>
+          </LinearGradient>
+        </Pressable>
+
         <View style={styles.bottomSpace} />
       </ScrollView>
     </Screen>
@@ -1874,4 +2008,140 @@ const styles = StyleSheet.create({
   smallMeta: { color: colors.mutedText, fontSize: 11 },
   chevron: { color: colors.mutedText, fontSize: 22 },
   bottomSpace: { height: spacing.xs },
+  liveTagPill: {
+    backgroundColor: "#EF4444",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  liveTagText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  podiumWidgetContainer: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    shadowColor: "#0D6EFD",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  podiumWidgetGradient: {
+    padding: 16,
+    paddingBottom: 10,
+  },
+  podiumWidgetRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  podiumSpotCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  spotRank1: {
+    zIndex: 3,
+  },
+  spotRank2: {
+    zIndex: 2,
+  },
+  spotRank3: {
+    zIndex: 1,
+  },
+  spotMedalIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  spotAvatarCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2.5,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+  spotAvatarRank1: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderColor: "#F59E0B",
+    borderWidth: 3,
+  },
+  spotAvatarText: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#0D6EFD",
+  },
+  spotStudentName: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  spotStudentMajor: {
+    fontSize: 9.5,
+    color: "#BFDBFE",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  spotScorePill: {
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  spotScoreText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  spotStandBlock: {
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+  },
+  standBlock1: {
+    height: 42,
+    backgroundColor: "rgba(245, 158, 11, 0.85)",
+  },
+  standBlock2: {
+    height: 32,
+    backgroundColor: "rgba(226, 232, 240, 0.55)",
+  },
+  standBlock3: {
+    height: 24,
+    backgroundColor: "rgba(234, 88, 12, 0.65)",
+  },
+  standBlockNum: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  spotFooterPrompt: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.15)",
+  },
+  spotFooterPromptText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#93C5FD",
+  },
 });

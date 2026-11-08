@@ -15,9 +15,9 @@ const DB = 'iuh_event';
 const NAMES = ['users', 'events', 'registrations', 'reviews', 'savedEvents', 'notifications'];
 const apply = process.argv.includes('--apply');
 if (process.argv.includes('--help')) {
-  console.log('Dùng từ thư mục IUHEvent/server:');
-  console.log('  node ../IUHEvent_Atlas_DataOnly_6Collections/seed-atlas.cjs');
-  console.log('  node ../IUHEvent_Atlas_DataOnly_6Collections/seed-atlas.cjs --apply');
+  console.log('Cách dùng từ thư mục IUHEvent:');
+  console.log('  node db_IUHEvent/seed-atlas.cjs');
+  console.log('  node db_IUHEvent/seed-atlas.cjs --apply');
   process.exit(0);
 }
 
@@ -90,12 +90,14 @@ function bsonify(value, ObjectId) {
 
 async function run() {
   // Resolve npm dependencies from the user's existing server project, not this data directory.
-  const serverRoot = process.cwd();
-  if (!fs.existsSync(path.join(serverRoot, 'package.json'))) {
-    throw new Error('Hãy cd vào thư mục IUHEvent/server trước khi chạy.');
+  let serverRoot = process.cwd();
+  if (fs.existsSync(path.join(serverRoot, 'server', 'package.json'))) {
+    serverRoot = path.join(serverRoot, 'server');
+  } else if (!fs.existsSync(path.join(serverRoot, 'package.json'))) {
+    throw new Error('Hãy cd vào thư mục IUHEvent hoặc IUHEvent/server trước khi chạy.');
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'),'utf8'));
-  if (pkg.name !== 'iuh-event-api') throw new Error('Đây không phải thư mục server của IUHEvent.');
+  if (pkg.name !== 'iuh-event-api') throw new Error('Không tìm thấy package server iuh-event-api hợp lệ.');
   const serverRequire = createRequire(path.join(serverRoot, 'package.json'));
   const { MongoClient, ObjectId } = serverRequire('mongodb');
   // Load only the local server/.env, not any uploaded example containing credentials.

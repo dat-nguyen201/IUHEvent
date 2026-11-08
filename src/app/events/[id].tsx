@@ -26,12 +26,15 @@ import { formatEventDate, isFutureEvent } from "@/utils/date";
 import { ReminderModal } from "@/components/ReminderModal";
 import { EventQrModal } from "@/components/EventQrModal";
 import { AttendancePassModal } from "@/components/AttendancePassModal";
+import { EventCertificateModal } from "@/components/EventCertificateModal";
 import { CampusMapModal } from "@/components/CampusMapModal";
 import { EventReviews } from "@/components/EventReviews";
 import { Ionicons } from "@expo/vector-icons";
 import { useEventReminder } from "@/hooks/use-event-reminder";
 import { useTheme } from "@tamagui/core";
 import type { StudentEvent } from "@/types/events";
+import { scheduleAutoReminderOnRegister, triggerLocalNotificationNow } from "@/services/notificationService";
+import { saveOfflineTicket, markOfflineTicketCheckedIn, removeOfflineTicket } from "@/services/offlineTicketService";
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,6 +46,7 @@ export default function EventDetailScreen() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
+  const [showCertModal, setShowCertModal] = useState(false);
   const [showCampusMap, setShowCampusMap] = useState(false);
 
   const {
@@ -185,6 +189,12 @@ export default function EventDetailScreen() {
     }
   };
 
+  useEffect(() => {
+    if (checkedIn && event?.id) {
+      void markOfflineTicketCheckedIn(event.id);
+    }
+  }, [checkedIn, event?.id]);
+
   const handleRegister = async () => {
     if (isEventExpired) {
       Alert.alert(
@@ -197,9 +207,44 @@ export default function EventDetailScreen() {
     setIsActionLoading(true);
     try {
       await registerEvent(event.id);
+
+      // Tự động lên lịch nhắc nhở trước 30 phút
+      void scheduleAutoReminderOnRegister({
+        id: event.id,
+        title: event.title,
+        location: event.location,
+        startsAt: event.startsAt,
+      });
+
+      // Tự động lưu bản vé Offline Ticket Pass vào bộ nhớ thiết bị
+      const studentId = user?.studentId || "21000001";
+      void saveOfflineTicket({
+        eventId: event.id,
+        title: event.title,
+        location: event.location,
+        startsAt: event.startsAt,
+        organizer: event.organizer,
+        category: event.category,
+        studentName: user?.name || "Sinh viên IUH",
+        studentId,
+        major: user?.major || "Khoa Công nghệ Thông tin",
+        status: "registered",
+        qrValue: `student-event:${event.id}`,
+        registeredAt: new Date().toISOString(),
+        drlPoints: 5,
+        certNumber: `IUH-${new Date().getFullYear()}-CERT-${event.id.toUpperCase()}-${studentId.slice(-4)}`,
+      });
+
+      // Bắn thông báo đẩy tức thì xác nhận đăng ký thành công
+      void triggerLocalNotificationNow(
+        `✅ Đăng ký thành công: ${event.title}`,
+        `Đã lưu vé ngoại tuyến vào máy. Hệ thống sẽ tự động nhắc nhở bạn 30 phút trước giờ diễn ra tại ${event.location}.`,
+        { eventId: event.id },
+      );
+
       Alert.alert(
         "Đăng ký thành công",
-        "Bạn đã đăng ký tham gia sự kiện. Hãy đến đúng giờ và chuẩn bị mã QR để điểm danh nhé!",
+        "Bạn đã đăng ký tham gia sự kiện. Vé điểm danh ngoại tuyến đã được lưu vào máy và hệ thống sẽ tự động nhắc bạn trước 30 phút!",
       );
     } catch (err) {
       Alert.alert(
@@ -232,6 +277,7 @@ export default function EventDetailScreen() {
             setIsActionLoading(true);
             try {
               await cancelRegistration(event.id);
+              void removeOfflineTicket(event.id);
               Alert.alert("Đã hủy đăng ký", "Bạn đã hủy đăng ký tham gia sự kiện.");
             } catch (err) {
               Alert.alert(
@@ -418,6 +464,15 @@ export default function EventDetailScreen() {
                 <Ionicons name="ribbon-outline" size={18} color="#FFFFFF" />
                 <Text style={styles.viewPassBtnText}>Xem Thẻ Điểm danh điện tử (+5đ ĐRL)</Text>
               </Pressable>
+
+              <Pressable
+                onPress={() => setShowCertModal(true)}
+                style={styles.viewCertBtn}
+                accessibilityRole="button"
+              >
+                <Ionicons name="ribbon" size={18} color="#92400E" />
+                <Text style={styles.viewCertBtnText}>Xem Giấy chứng nhận (E-Certificate)</Text>
+              </Pressable>
             </View>
           ) : registered ? (
             <Pressable
@@ -597,6 +652,14 @@ export default function EventDetailScreen() {
         user={user}
         isAlreadyCheckedIn={true}
         onClose={() => setShowPassModal(false)}
+      />
+
+      {/* Official Event E-Certificate Modal */}
+      <EventCertificateModal
+        visible={showCertModal}
+        event={event}
+        user={user}
+        onClose={() => setShowCertModal(false)}
       />
 
       {/* Campus Map / Location Guide Modal */}
@@ -788,6 +851,22 @@ const styles = StyleSheet.create({
   },
   viewPassBtnText: {
     color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  viewCertBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "#FEF3C7",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  viewCertBtnText: {
+    color: "#92400E",
     fontSize: 14,
     fontWeight: "800",
   },

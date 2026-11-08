@@ -84,6 +84,28 @@ export function createAdminEventsRouter(db: Db) {
       updatedAt: now,
     };
     await events.insertOne(event);
+
+    // Tự động gửi thông báo sự kiện mới đến sinh viên
+    try {
+      const notifications = db.collection('notifications');
+      const users = db.collection<UserDocument>('users');
+      const allActiveStudents = await users.find({ role: 'student', status: 'active' }).limit(50).toArray();
+      if (allActiveStudents.length > 0) {
+        const newEventNotifs = allActiveStudents.map((u) => ({
+          userId: u._id,
+          eventId: event.id,
+          title: `🎉 Sự kiện mới: ${event.title}`,
+          body: `Đơn vị "${event.organizer}" vừa mở đăng ký sự kiện mới tại ${event.location}. Tham gia ngay!`,
+          type: 'event',
+          read: false,
+          createdAt: now,
+        }));
+        await notifications.insertMany(newEventNotifs);
+      }
+    } catch (err) {
+      console.warn('Failed to dispatch new event notifications:', err);
+    }
+
     res.status(201).json({ data: toPublicEvent(event) });
   });
 
@@ -189,6 +211,38 @@ export function createAdminEventsRouter(db: Db) {
     const updates: Partial<EventDocument> = { ...otherUpdates, updatedAt: new Date() };
     if (startsAt) updates.startsAt = new Date(startsAt);
     await events.updateOne({ id: event.id }, { $set: updates });
+
+    // Tự động gửi thông báo đổi phòng/đổi giờ tới các sinh viên đã đăng ký
+    const isLocationChanged = input.location && input.location !== event.location;
+    const isTimeChanged = startsAt && new Date(startsAt).getTime() !== new Date(event.startsAt).getTime();
+
+    if (isLocationChanged || isTimeChanged) {
+      try {
+        const registrations = db.collection<RegistrationDocument>('registrations');
+        const notifications = db.collection('notifications');
+        const regStudents = await registrations.find({ eventId: event.id, status: { $in: ['registered', 'checked-in'] } }).toArray();
+
+        if (regStudents.length > 0) {
+          const notifDocs = regStudents.map((r) => ({
+            userId: r.userId,
+            eventId: event.id,
+            title: `📢 Đổi lịch: ${event.title}`,
+            body: isTimeChanged && isLocationChanged
+              ? `Sự kiện đã đổi sang ${new Date(startsAt!).toLocaleString('vi-VN')} tại ${input.location}.`
+              : isLocationChanged
+                ? `Địa điểm mới của sự kiện: ${input.location}. Hãy đến đúng địa điểm mới nhé!`
+                : `Thời gian mới của sự kiện: ${new Date(startsAt!).toLocaleString('vi-VN')}.`,
+            type: 'event',
+            read: false,
+            createdAt: new Date(),
+          }));
+          await notifications.insertMany(notifDocs);
+        }
+      } catch (err) {
+        console.warn('Failed to notify students on event update:', err);
+      }
+    }
+
     const updated = await events.findOne({ id: event.id });
     res.json({ data: toPublicEvent(updated!) });
   });

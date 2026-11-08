@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, Image, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@tamagui/core';
 import type { StudentEvent } from '@/types/events';
 import type { AuthUser } from '@/types/auth';
+import { EventCertificateModal } from '@/components/EventCertificateModal';
 
 interface AttendancePassModalProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export function AttendancePassModal({
   onViewEvent,
 }: AttendancePassModalProps) {
   const theme = useTheme();
+  const [showCertModal, setShowCertModal] = useState(false);
 
   if (!event) return null;
 
@@ -154,6 +156,16 @@ export function AttendancePassModal({
               </View>
             </View>
 
+            {/* Certificate Button */}
+            <Pressable
+              style={[styles.certButton, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
+              onPress={() => setShowCertModal(true)}
+              accessibilityRole="button"
+            >
+              <Ionicons name="ribbon" size={17} color="#B45309" />
+              <Text style={styles.certButtonText}>Xem Giấy chứng nhận điện tử (E-Certificate)</Text>
+            </Pressable>
+
             {/* Quick Share / Save Tools */}
             <View style={styles.toolsRow}>
               <Pressable
@@ -198,6 +210,14 @@ export function AttendancePassModal({
           </View>
         </View>
       </View>
+
+      <EventCertificateModal
+        visible={showCertModal}
+        event={event}
+        user={user}
+        checkedInAt={displayTime}
+        onClose={() => setShowCertModal(false)}
+      />
     </Modal>
   );
 }
@@ -363,6 +383,21 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontSize: 11,
     fontWeight: '800',
+  },
+  certButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  certButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
   },
   toolsRow: {
     flexDirection: 'row',

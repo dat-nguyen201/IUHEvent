@@ -61,6 +61,15 @@ export default function ProfileScreen() {
       progress: `${Math.min(3, checkedInEventIds.length)}/3`,
     },
     {
+      id: "volunteer_ambassador",
+      title: "Đại sứ Tình nguyện",
+      desc: "Check-in sự kiện tình nguyện",
+      icon: "heart-outline" as const,
+      color: "#10B981",
+      unlocked: checkedInEventIds.length >= 2,
+      progress: `${Math.min(2, checkedInEventIds.length)}/2`,
+    },
+    {
       id: "connector",
       title: "Chuyên gia theo dõi",
       desc: "Lưu từ 3 sự kiện vào lịch cá nhân",
@@ -77,6 +86,15 @@ export default function ProfileScreen() {
       color: "#F59E0B",
       unlocked: drlPoints >= 85,
       progress: `${drlPoints}/85`,
+    },
+    {
+      id: "scholar_champion",
+      title: "Học giả Xuất sắc",
+      desc: "Đạt Điểm rèn luyện tối đa 95-100",
+      icon: "trophy-outline" as const,
+      color: "#D97706",
+      unlocked: drlPoints >= 95,
+      progress: `${drlPoints}/95`,
     },
   ];
 
@@ -324,6 +342,29 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
+          {/* Leaderboard CTA Button */}
+          <Pressable
+            onPress={() => router.push('/leaderboard')}
+            style={styles.leaderboardCtaBtn}
+            accessibilityRole="button"
+          >
+            <LinearGradient
+              colors={['#FEF3C7', '#FDE68A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.leaderboardCtaGradient}
+            >
+              <View style={styles.leaderboardCtaLeft}>
+                <Text style={styles.leaderboardCtaIcon}>🏆</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.leaderboardCtaTitle}>Bảng xếp hạng Rèn luyện IUH</Text>
+                  <Text style={styles.leaderboardCtaSub}>Xem thứ hạng của bạn & thi đua các Khoa →</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#92400E" />
+            </LinearGradient>
+          </Pressable>
+
           <View
             style={[
               styles.divider,
@@ -463,6 +504,33 @@ export default function ProfileScreen() {
             })}
           </View>
         </View>
+
+        {/* Ví vé & Thẻ điểm danh ngoại tuyến */}
+        <Pressable
+          onPress={() => router.push('/offline-tickets' as any)}
+          style={[styles.offlineTicketCard, { backgroundColor: theme.surface.val, borderColor: '#A7F3D0' }]}
+          accessibilityRole="button"
+        >
+          <View style={styles.offlineTicketLeft}>
+            <View style={styles.offlineTicketIconCircle}>
+              <Ionicons name="cloud-offline" size={20} color="#059669" />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.offlineTicketTitle, { color: theme.color.val }]}>
+                  Ví vé & Thẻ điểm danh ngoại tuyến
+                </Text>
+                <View style={styles.offlineReadyPill}>
+                  <Text style={styles.offlineReadyPillText}>OFFLINE</Text>
+                </View>
+              </View>
+              <Text style={[styles.offlineTicketSub, { color: theme.muted.val }]}>
+                Mở vé và thẻ điểm danh khi hội trường mất mạng
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.muted.val} />
+        </Pressable>
 
         <Pressable
           onPress={() => {
@@ -610,6 +678,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  leaderboardCtaBtn: {
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    marginTop: 4,
+  },
+  leaderboardCtaGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  leaderboardCtaLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  leaderboardCtaIcon: {
+    fontSize: 22,
+  },
+  leaderboardCtaTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#92400E",
+  },
+  leaderboardCtaSub: {
+    fontSize: 11,
+    color: "#B45309",
+    marginTop: 1,
+  },
   achievementsTitle: {
     fontSize: 14,
     fontWeight: "900",
@@ -689,6 +790,48 @@ const styles = StyleSheet.create({
   adminAccess: { borderRadius: 14, padding: 18, gap: 6 },
   adminAccessTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   adminAccessCaption: { color: "#FFFFFF", fontSize: 12 },
+  offlineTicketCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginTop: -spacing.xs,
+  },
+  offlineTicketLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  offlineTicketIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#ECFDF5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offlineTicketTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+  },
+  offlineReadyPill: {
+    backgroundColor: "#10B981",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  offlineReadyPillText: {
+    fontSize: 9,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  offlineTicketSub: {
+    fontSize: 11,
+  },
   logoutButton: {
     alignItems: "center",
     borderColor: colors.danger,

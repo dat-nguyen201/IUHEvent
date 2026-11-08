@@ -371,6 +371,18 @@ export default function ScheduleScreen() {
         })}
       </View>
 
+      {/* Offline Pass Wallet Shortcut */}
+      <Pressable
+        onPress={() => router.push('/offline-tickets' as any)}
+        style={[styles.offlineShortcutBtn, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+        accessibilityRole="button"
+      >
+        <Ionicons name="cloud-offline" size={15} color="#059669" />
+        <Text style={styles.offlineShortcutText}>
+          Xem Thẻ điểm danh ngoại tuyến (Offline Passes) →
+        </Text>
+      </Pressable>
+
       {personalDataError && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{personalDataError}</Text>
@@ -982,5 +994,22 @@ const styles = StyleSheet.create({
   viewDetailText: {
     fontSize: 13,
     fontWeight: "700",
+  },
+  offlineShortcutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  offlineShortcutText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#065F46",
   },
 });

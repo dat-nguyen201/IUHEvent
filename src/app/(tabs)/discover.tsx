@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useTheme } from "@tamagui/core";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,7 +26,6 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { useTheme } from "@tamagui/core";
 
 import {
   EVENT_CARD_GAP,
@@ -34,14 +34,14 @@ import {
 } from "@/components/EventCard";
 import { Screen } from "@/components/Screen";
 import { StatusMessage } from "@/components/StatusMessage";
+import { appMode } from "@/constants/app-mode";
 import { colors, spacing } from "@/constants/app-theme";
 import { eventCategories } from "@/data/events";
-import { getEvents } from "@/services/eventService";
-import { appMode } from "@/constants/app-mode";
 import { invalidateEventsCache } from "@/services/eventsApi";
+import { getEvents } from "@/services/eventService";
 import type { EventCategory, StudentEvent } from "@/types/events";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 const allCategories = "Tất cả" as const;
 type CategoryFilter = EventCategory | typeof allCategories;
 
@@ -172,7 +172,9 @@ export default function DiscoverScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [searchFocused, setSearchFocused] = useState(false);
   const [retryToken, setRetryToken] = useState(0);
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "this_week" | "this_month">("all");
+  const [dateFilter, setDateFilter] = useState<
+    "all" | "today" | "this_week" | "this_month"
+  >("all");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const listRef = useRef<FlatList<StudentEvent>>(null);
   const searchInputRef = useRef<{ focus: () => void } | null>(null);
@@ -278,14 +280,14 @@ export default function DiscoverScreen() {
   );
 
   useEffect(() => {
-    if (appMode === "demo") void loadFirstPage();
+    void loadFirstPage();
   }, [loadFirstPage]);
 
   useFocusEffect(
     useCallback(() => {
       if (appMode === "remote") {
         invalidateEventsCache();
-        void loadFirstPage();
+        void loadFirstPage("refresh");
       }
     }, [loadFirstPage]),
   );

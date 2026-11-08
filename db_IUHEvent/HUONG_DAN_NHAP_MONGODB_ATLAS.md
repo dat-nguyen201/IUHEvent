@@ -68,13 +68,13 @@ npm install
 Nếu đang ở đúng thư mục `server`, chạy xem trước **không ghi lên Atlas**:
 
 ```powershell
-node ..\IUHEvent_Atlas_DataOnly_6Collections\seed-atlas.cjs
+node .\db_IUHEvent\seed-atlas.cjs
 ```
 
 Khi chắc chắn `.env` trỏ đúng `iuh_event`, chạy lệnh nhập thực tế:
 
 ```powershell
-node ..\IUHEvent_Atlas_DataOnly_6Collections\seed-atlas.cjs --apply
+node .\db_IUHEvent\seed-atlas.cjs --apply
 ```
 
 Chờ log hiển thị lần lượt `users`, `events`, `registrations`, `reviews`, `savedEvents`, `notifications` và dòng `HOÀN THÀNH`.

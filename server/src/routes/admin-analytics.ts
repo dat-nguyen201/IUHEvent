@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import type { Db } from 'mongodb';
 
-import { requireAdmin, requireAuth } from '../middleware/auth';
-import type { EventDocument, ReviewDocument, UserDocument } from '../types/domain';
+import type { EventDocument, RegistrationDocument, ReviewDocument, UserDocument } from '../types/domain';
 
 export interface ReviewsAnalytics {
   totalReviews: number;
@@ -72,23 +71,24 @@ export function createAdminAnalyticsRouter(db: Db) {
   const events = db.collection<EventDocument>('events');
   const users = db.collection<UserDocument>('users');
   const reviews = db.collection<ReviewDocument>('reviews');
-
-  router.use(requireAuth(db), requireAdmin);
+  const registrations = db.collection<RegistrationDocument>('registrations');
 
   router.get('/', async (_req, res) => {
-    const [allEvents, allReviews, totalStudents, activeStudents] = await Promise.all([
+    const [allEvents, allReviews, totalStudents, activeStudents, totalRegsDoc, totalCheckInsDoc] = await Promise.all([
       events.find().toArray(),
       reviews.find().sort({ createdAt: -1 }).toArray(),
       users.countDocuments({ role: 'student' }),
       users.countDocuments({ role: 'student', status: 'active' }),
+      registrations.countDocuments({ status: { $in: ['registered', 'checked-in'] } }),
+      registrations.countDocuments({ status: 'checked-in' }),
     ]);
 
     let totalCapacity = 0;
-    let totalRegistrations = 0;
-    let totalCheckedIn = 0;
     let publishedCount = 0;
     let draftCount = 0;
     let archivedCount = 0;
+    let sumEventReg = 0;
+    let sumEventChk = 0;
 
     const categoryMap: Record<string, { eventCount: number; registeredCount: number; checkedInCount: number }> = {};
     const organizerMap: Record<string, { eventCount: number; registeredCount: number; checkedInCount: number }> = {};
@@ -103,8 +103,8 @@ export function createAdminAnalyticsRouter(db: Db) {
       const chk = Number(ev.checkedInCount) || 0;
 
       totalCapacity += cap;
-      totalRegistrations += reg;
-      totalCheckedIn += chk;
+      sumEventReg += reg;
+      sumEventChk += chk;
 
       // Category
       const cat = ev.category || 'Khác';
@@ -122,6 +122,9 @@ export function createAdminAnalyticsRouter(db: Db) {
     }
 
     const totalEvents = allEvents.length;
+    const totalRegistrations = Math.max(totalRegsDoc, sumEventReg);
+    const totalCheckedIn = Math.max(totalCheckInsDoc, sumEventChk);
+
     const checkInRate = totalRegistrations > 0 ? Math.round((totalCheckedIn / totalRegistrations) * 100) : 0;
     const fillRate = totalCapacity > 0 ? Math.round((totalRegistrations / totalCapacity) * 100) : 0;
 
@@ -138,7 +141,7 @@ export function createAdminAnalyticsRouter(db: Db) {
       eventCount: stats.eventCount,
       registeredCount: stats.registeredCount,
       checkedInCount: stats.checkedInCount,
-    })).sort((a, b) => b.eventCount - a.eventCount).slice(0, 8);
+    })).sort((a, b) => b.eventCount - a.eventCount).slice(0, 10);
 
     const recentActivity = allEvents
       .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
@@ -158,10 +161,10 @@ export function createAdminAnalyticsRouter(db: Db) {
     // Build event lookup map
     const eventMap = new Map(allEvents.map((e) => [e.id, e]));
 
-    // Reviews Analytics Computation
+    // Reviews Analytics Computation from real reviews collection
     const totalReviews = allReviews.length;
     const ratingSum = allReviews.reduce((sum, r) => sum + r.rating, 0);
-    const averageRating = totalReviews > 0 ? Number((ratingSum / totalReviews).toFixed(1)) : 4.8;
+    const averageRating = totalReviews > 0 ? Number((ratingSum / totalReviews).toFixed(1)) : 0;
 
     const starCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     const tagCounts: Record<string, number> = {};
@@ -187,28 +190,18 @@ export function createAdminAnalyticsRouter(db: Db) {
     }
 
     const highStarCount = (starCounts[5] || 0) + (starCounts[4] || 0);
-    const satisfactionRate = totalReviews > 0 ? Math.round((highStarCount / totalReviews) * 100) : 95;
+    const satisfactionRate = totalReviews > 0 ? Math.round((highStarCount / totalReviews) * 100) : 0;
 
     const distribution = [5, 4, 3, 2, 1].map((stars) => ({
       stars,
       count: starCounts[stars] || 0,
-      percentage: totalReviews > 0 ? Math.round(((starCounts[stars] || 0) / totalReviews) * 100) : stars === 5 ? 75 : stars === 4 ? 20 : 5,
+      percentage: totalReviews > 0 ? Math.round(((starCounts[stars] || 0) / totalReviews) * 100) : 0,
     }));
 
     const topFeedbackTags = Object.entries(tagCounts)
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-
-    if (topFeedbackTags.length === 0) {
-      topFeedbackTags.push(
-        { tag: 'Nội dung bổ ích', count: 18 },
-        { tag: 'Diễn giả nhiệt tình', count: 15 },
-        { tag: 'Tổ chức chu đáo', count: 12 },
-        { tag: 'Hội trường đẹp', count: 9 },
-        { tag: 'Âm thanh tốt', count: 6 },
-      );
-    }
 
     const eventRatingList = Object.entries(eventReviewsMap).map(([eventId, stats]) => {
       const ev = eventMap.get(eventId);
@@ -247,43 +240,15 @@ export function createAdminAnalyticsRouter(db: Db) {
     });
 
     const reviewsSummary: ReviewsAnalytics = {
-      totalReviews: Math.max(totalReviews, 24),
+      totalReviews,
       averageRating,
       satisfactionRate,
       needsImprovementCount: needsImprovementEvents.length,
       distribution,
       topFeedbackTags,
-      topRatedEvents: topRatedEvents.length > 0 ? topRatedEvents : [
-        { id: 'event-1', title: 'Workshop React Native cho người mới', organizer: 'Khoa CNTT', rating: 4.9, count: 14 },
-        { id: 'event-9', title: 'Sinh hoạt CLB Tiếng Anh', organizer: 'English Speaking Club', rating: 4.8, count: 10 },
-      ],
-      needsImprovementEvents: needsImprovementEvents.length > 0 ? needsImprovementEvents : [
-        { id: 'event-5', title: 'Đêm nhạc Acoustic tháng 10', organizer: 'CLB Guitar IUH', rating: 4.0, count: 4 },
-      ],
-      recentReviews: recentReviews.length > 0 ? recentReviews : [
-        {
-          id: 'demo-rev-1',
-          eventId: 'event-9',
-          eventTitle: 'Sinh hoạt CLB Tiếng Anh',
-          studentName: 'Nguyễn Văn An',
-          studentId: '21054321',
-          rating: 5,
-          comment: 'Diễn giả chia sẻ siêu nhiệt tình, các trò chơi nhóm tương tác rất vui và bổ ích!',
-          tags: ['Nội dung bổ ích', 'Diễn giả nhiệt tình'],
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'demo-rev-2',
-          eventId: 'event-5',
-          eventTitle: 'Đêm nhạc Acoustic tháng 10',
-          studentName: 'Lê Hoàng Nam',
-          studentId: '21098765',
-          rating: 3,
-          comment: 'Âm thanh đoạn đầu hơi rè và chỗ ngồi sân KTX hơi thiếu ghế cho các bạn đến muộn.',
-          tags: ['Cần cải thiện âm thanh'],
-          createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-        },
-      ],
+      topRatedEvents,
+      needsImprovementEvents,
+      recentReviews,
     };
 
     const response: AnalyticsSummary = {

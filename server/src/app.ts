@@ -13,6 +13,7 @@ import { createAuthRouter } from './routes/auth';
 import { createEventsRouter } from './routes/events';
 import { createMeRouter } from './routes/me';
 import { createNotificationsRouter } from './routes/notifications';
+import { createLeaderboardRouter } from './routes/leaderboard';
 
 const defaultOrigins = ['http://localhost:8081', 'http://localhost:8084', 'http://127.0.0.1:8081', 'http://127.0.0.1:8084'];
 
@@ -59,6 +60,7 @@ export function createApp(db: Db) {
   app.use('/api/admin/events', createAdminEventsRouter(db));
   app.use('/api/admin/users', createAdminUsersRouter(db));
   app.use('/api/admin/analytics', createAdminAnalyticsRouter(db));
+  app.use('/api/leaderboard', createLeaderboardRouter(db));
 
   app.use((_req, res) => {
     res.status(404).json({ code: 'ROUTE_NOT_FOUND', message: 'Không tìm thấy API.' });

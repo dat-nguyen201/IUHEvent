@@ -299,3 +299,49 @@ export async function markAllNotificationsAsRead(): Promise<void> {
     { method: 'POST', token },
   );
 }
+
+/** Tự động lên lịch nhắc nhở 30 phút trước khi sự kiện diễn ra ngay khi đăng ký thành công */
+export async function scheduleAutoReminderOnRegister(event: {
+  id: string;
+  title: string;
+  location: string;
+  startsAt: string;
+}): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await scheduleEventReminder({
+      eventId: event.id,
+      title: event.title,
+      location: event.location,
+      startsAt: event.startsAt,
+      minutesBefore: 30,
+    });
+  } catch (error) {
+    console.warn('Auto reminder scheduling failed:', error);
+  }
+}
+
+/** Bắn thông báo cục bộ tức thì lên thanh trạng thái điện thoại */
+export async function triggerLocalNotificationNow(
+  title: string,
+  body: string,
+  data?: Record<string, unknown>,
+): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const perm = await requestNotificationPermission();
+    if (!perm.granted) return null;
+
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: data || {},
+      },
+      trigger: null, // trigger immediately
+    });
+  } catch (error) {
+    console.warn('Failed to trigger immediate notification:', error);
+    return null;
+  }
+}

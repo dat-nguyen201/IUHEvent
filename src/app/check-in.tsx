@@ -33,6 +33,8 @@ import { getEventById, getEventByIdSync } from '@/services/eventService';
 import { ApiError } from '@/services/apiClient';
 import type { StudentEvent } from '@/types/events';
 import { useTheme } from '@tamagui/core';
+import { triggerLocalNotificationNow } from '@/services/notificationService';
+import { markOfflineTicketCheckedIn } from '@/services/offlineTicketService';
 
 export function parseEventQrCode(raw: string): string | null {
   const trimmed = raw.trim();
@@ -170,6 +172,12 @@ export default function CheckInScreen() {
 
         setIsAlreadyCheckedIn(false);
         setAttendancePassEvent(foundEvent);
+        void markOfflineTicketCheckedIn(foundEvent.id);
+        void triggerLocalNotificationNow(
+          `🎉 Điểm danh thành công (+5đ ĐRL)`,
+          `Bạn đã hoàn thành điểm danh sự kiện "${foundEvent.title}". Thẻ xác nhận điện tử đã được ghi nhận vào lịch sử!`,
+          { eventId: foundEvent.id },
+        );
       } catch (error) {
         const message =
           error instanceof ApiError

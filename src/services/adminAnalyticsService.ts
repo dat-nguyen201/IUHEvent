@@ -1,5 +1,6 @@
 import { appMode } from '@/constants/app-mode';
 import { apiRequest } from '@/services/apiClient';
+import { getRemoteAccessToken } from '@/services/remoteAuthService';
 import { studentEvents } from '@/data/events';
 
 export interface ReviewsAnalytics {
@@ -68,7 +69,8 @@ export interface AnalyticsSummary {
 export async function getAdminAnalytics(): Promise<AnalyticsSummary> {
   if (appMode === 'remote') {
     try {
-      const response = await apiRequest<{ data: AnalyticsSummary }>('/api/admin/analytics');
+      const token = await getRemoteAccessToken();
+      const response = await apiRequest<{ data: AnalyticsSummary }>('/api/admin/analytics', { token });
       if (response?.data) return response.data;
     } catch (e) {
       console.warn('Could not fetch remote analytics, falling back to local computation:', e);
