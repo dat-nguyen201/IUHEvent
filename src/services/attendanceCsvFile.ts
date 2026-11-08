@@ -1,4 +1,6 @@
 import { Platform } from "react-native";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 /** Tạo file CSV thật thay vì gửi nội dung CSV dưới dạng tin nhắn văn bản. */
 export async function exportAttendanceCsvFile(
@@ -11,27 +13,25 @@ export async function exportAttendanceCsvFile(
 
   if (Platform.OS === "web") {
     // Trên trình duyệt: tải file về máy, không dùng expo-sharing (URI nội bộ không được hỗ trợ).
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    try {
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } finally {
-      // Không thu hồi ngay để trình duyệt kịp bắt đầu tải xuống.
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (typeof document !== "undefined") {
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } finally {
+        // Không thu hồi ngay để trình duyệt kịp bắt đầu tải xuống.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
     }
     return filename;
   }
 
   // Android/iOS: tạo file trên thiết bị rồi chia sẻ chính tệp đó (không phải text).
-  const [{ File, Paths }, Sharing] = await Promise.all([
-    import("expo-file-system"),
-    import("expo-sharing"),
-  ]);
   const file = new File(Paths.document, filename);
   await file.write(csv);
 
