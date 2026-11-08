@@ -156,6 +156,11 @@ export default function AuthScreen() {
             <Pressable onPress={() => setShowPassword((value) => !value)} style={styles.visibilityButton}>
               <Text style={[styles.visibilityText, { color: theme.primary.val }]}>{showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}</Text>
             </Pressable>
+            {appMode === 'remote' && mode === 'login' ? (
+              <Pressable onPress={() => router.push('/forgot-password' as never)} style={styles.forgotButton}>
+                <Text style={[styles.visibilityText, { color: theme.primary.val }]}>Quên mật khẩu?</Text>
+              </Pressable>
+            ) : null}
             {error ? <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
 
             <Pressable disabled={busy} onPress={submit} style={[styles.primaryButton, busy && styles.disabledButton]}>
@@ -265,6 +270,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.text, fontSize: 13, fontWeight: '700' },
   input: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: 12, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 50, paddingHorizontal: spacing.md },
   visibilityButton: { alignSelf: 'flex-end', paddingVertical: 2 },
+  forgotButton: { alignSelf: 'flex-end', paddingVertical: 2 },
   visibilityText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   error: { color: colors.danger, fontSize: 13, lineHeight: 19 },
   startupError: { gap: spacing.xs },

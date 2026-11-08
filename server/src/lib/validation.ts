@@ -14,6 +14,19 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(128),
 }).strict();
 
+export const forgotPasswordSchema = z.object({ email: emailSchema }).strict();
+
+export const resetPasswordSchema = z.object({
+  email: emailSchema,
+  code: z.string().trim().regex(/^\d{6}$/),
+  newPassword: z.string().min(8).max(128),
+}).strict();
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(8).max(128),
+}).strict();
+
 export const profileSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   studentId: z.string().trim().min(2).max(32).optional(),

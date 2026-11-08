@@ -4,6 +4,7 @@ import { appMode, appModeConfigError, type AppMode } from '@/constants/app-mode'
 import { useAppState } from '@/context/AppStateContext';
 import {
   completeGetStarted,
+  changeDemoPassword,
   getAuthSession,
   hasCompletedGetStarted,
   loginDemoAccount,
@@ -15,6 +16,9 @@ import {
   getRemoteAuthSession,
   loginRemoteAccount,
   logoutRemoteAccount,
+  changeRemotePassword,
+  requestRemotePasswordReset,
+  resetRemotePassword,
   registerRemoteAccount,
 } from '@/services/remoteAuthService';
 import type { AuthUser, RegisterInput } from '@/types/auth';
@@ -28,6 +32,9 @@ type AuthContextValue = {
   register: (input: RegisterInput) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ message: string }>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<{ message: string }>;
   retryRestoreSession: () => Promise<void>;
   finishGetStarted: () => Promise<void>;
 };
@@ -117,6 +124,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [setUser]);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (!user) throw new ApiError('UNAUTHORIZED', 'Vui lòng đăng nhập lại.');
+    const nextUser = appMode === 'demo'
+      ? (await changeDemoPassword(user.email, currentPassword, newPassword), user)
+      : await changeRemotePassword(currentPassword, newPassword);
+    acceptUser(nextUser);
+  }, [acceptUser, user]);
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    if (appMode !== 'remote') {
+      throw new ApiError('PASSWORD_RESET_DEMO_UNAVAILABLE', 'Khôi phục qua email chỉ hoạt động với tài khoản remote.');
+    }
+    return requestRemotePasswordReset(email);
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, code: string, newPassword: string) => {
+    if (appMode !== 'remote') {
+      throw new ApiError('PASSWORD_RESET_DEMO_UNAVAILABLE', 'Khôi phục qua email chỉ hoạt động với tài khoản remote.');
+    }
+    return resetRemotePassword(email, code, newPassword);
+  }, []);
+
   const finishGetStarted = useCallback(async () => {
     await completeGetStarted();
     setHasSeenGetStarted(true);
@@ -131,9 +160,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     register,
     login,
     logout,
+    changePassword,
+    requestPasswordReset,
+    resetPassword,
     retryRestoreSession: restoreSession,
     finishGetStarted,
-  }), [user, isReady, startupError, hasSeenGetStarted, register, login, logout, restoreSession, finishGetStarted]);
+  }), [user, isReady, startupError, hasSeenGetStarted, register, login, logout, changePassword, requestPasswordReset, resetPassword, restoreSession, finishGetStarted]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
