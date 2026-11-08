@@ -101,6 +101,8 @@ export type PublicEvent = {
   category: EventDocument['category'];
   organizer: string;
   capacity: number;
+  registeredCount: number;
+  remainingSpots: number;
   checkedInCount: number;
   summarySource: string;
   imageKey?: string;
@@ -130,6 +132,8 @@ export function toPublicEvent(event: EventDocument): PublicEvent {
     category: event.category,
     organizer: event.organizer,
     capacity: event.capacity,
+    registeredCount: event.registeredCount,
+    remainingSpots: Math.max(0, event.capacity - event.registeredCount),
     checkedInCount: event.checkedInCount,
     summarySource: event.summarySource,
     imageKey: event.imageKey,

@@ -60,3 +60,10 @@ export const reviewSchema = z.object({
   tags: z.array(z.string().trim().max(50)).default([]),
   comment: z.string().trim().max(1000).default(''),
 }).strict();
+
+export const chatSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().trim().min(1).max(2_000),
+  }).strict()).min(1).max(12),
+}).strict();
