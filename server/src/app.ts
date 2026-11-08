@@ -10,6 +10,7 @@ import { createAdminAnalyticsRouter } from './routes/admin-analytics';
 import { createAdminEventsRouter } from './routes/admin-events';
 import { createAdminUsersRouter } from './routes/admin-users';
 import { createAuthRouter } from './routes/auth';
+import { createChatRouter } from './routes/chat';
 import { createEventsRouter } from './routes/events';
 import { createMeRouter } from './routes/me';
 import { createNotificationsRouter } from './routes/notifications';
@@ -53,6 +54,7 @@ export function createApp(db: Db) {
   });
 
   app.use('/api/auth', createAuthRouter(db));
+  app.use('/api/chat', createChatRouter(db));
   app.use('/api/events', createEventsRouter(db));
   app.use('/api/me', createMeRouter(db));
   app.use('/api/notifications', createNotificationsRouter(db));

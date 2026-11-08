@@ -73,6 +73,8 @@ export function mapEventDto(dto: EventDto): StudentEvent {
     organizer: dto.organizer ?? "",
     image,
     capacity: Number(dto.capacity) || 0,
+    registeredCount: Number(dto.registeredCount) || 0,
+    remainingSpots: Number(dto.remainingSpots) || Math.max(0, Number(dto.capacity) - Number(dto.registeredCount || 0)),
     checkedInCount: Number(dto.checkedInCount) || 0,
     summarySource: dto.summarySource ?? "",
   };

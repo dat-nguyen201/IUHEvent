@@ -10,6 +10,8 @@ export type EventDto = {
   category: EventCategory;
   organizer: string;
   capacity: number;
+  registeredCount?: number;
+  remainingSpots?: number;
   checkedInCount: number;
   summarySource: string;
   /** Tên file ảnh có sẵn trong app (vd: `anh01.png`). */

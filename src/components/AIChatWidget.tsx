@@ -1,0 +1,198 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useTheme } from '@tamagui/core';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+import { useAuth } from '@/context/AuthContext';
+import { ApiError } from '@/services/apiClient';
+import { sendChatMessage, type ChatMessage } from '@/services/aiChatService';
+
+const welcomeMessage: ChatMessage = {
+  role: 'assistant',
+  content: 'Xin chào! Mình có thể giúp bạn tìm sự kiện IUH, hướng dẫn đăng ký hoặc check-in QR.',
+};
+
+export function AIChatWidget() {
+  const { user } = useAuth();
+  const theme = useTheme();
+  const [visible, setVisible] = useState(false);
+  const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
+  const [error, setError] = useState<string | null>(null);
+
+  const suggestions = useMemo(() => ['Có sự kiện nào sắp diễn ra?', 'Hướng dẫn đăng ký sự kiện', 'Check-in QR như thế nào?'], []);
+
+  const send = useCallback(async (value = input) => {
+    const content = value.trim();
+    if (!content || isSending) return;
+    const nextMessages = [...messages, { role: 'user' as const, content }];
+    setMessages(nextMessages);
+    setInput('');
+    setError(null);
+    setIsSending(true);
+    try {
+      const reply = await sendChatMessage(nextMessages);
+      setMessages((current) => [...current, reply]);
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : 'Không thể kết nối trợ lý. Hãy thử lại.');
+    } finally {
+      setIsSending(false);
+    }
+  }, [input, isSending, messages]);
+
+  if (!user) return null;
+
+  return (
+    <>
+      <Pressable
+        accessibilityLabel="Mở trợ lý AI"
+        onPress={() => setVisible(true)}
+        style={[styles.floatingButton, { backgroundColor: theme.primary.val }]}
+      >
+        <Ionicons name="chatbubble-ellipses-outline" size={24} color="#FFFFFF" />
+      </Pressable>
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
+          <SafeAreaView style={[styles.sheet, { backgroundColor: theme.background.val }]}>
+            <View style={[styles.header, { borderBottomColor: theme.border.val }]}>
+              <View style={styles.headerTitle}>
+                <View style={[styles.avatar, { backgroundColor: theme.primary.val }]}>
+                  <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={[styles.title, { color: theme.color.val }]}>Trợ lý IUH Event</Text>
+                  <Text style={[styles.subtitle, { color: theme.muted.val }]}>Hỗ trợ tìm và tham gia sự kiện</Text>
+                </View>
+              </View>
+              <Pressable accessibilityLabel="Đóng trợ lý AI" onPress={() => setVisible(false)} hitSlop={12}>
+                <Ionicons name="close" size={26} color={theme.color.val} />
+              </Pressable>
+            </View>
+            <FlatList
+              contentContainerStyle={styles.messageList}
+              data={messages}
+              keyExtractor={(_, index) => `${index}`}
+              renderItem={({ item }) => (
+                <View>
+                  <View style={[styles.message, item.role === 'user' ? styles.userMessage : styles.assistantMessage, { backgroundColor: item.role === 'user' ? theme.primary.val : theme.surface.val }]}>
+                    <Text style={[styles.messageText, { color: item.role === 'user' ? '#FFFFFF' : theme.color.val }]}>{item.content}</Text>
+                  </View>
+                  {item.events?.map((event) => (
+                    <Pressable
+                      accessibilityLabel={`Mở sự kiện ${event.title}`}
+                      key={event.id}
+                      onPress={() => {
+                        setVisible(false);
+                        router.push({ pathname: '/events/[id]', params: { id: event.id } });
+                      }}
+                      style={[styles.eventCard, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}
+                    >
+                      <Image source={event.image} style={styles.eventImage} />
+                      <View style={styles.eventInfo}>
+                        <Text numberOfLines={2} style={[styles.eventTitle, { color: theme.color.val }]}>{event.title}</Text>
+                        <Text numberOfLines={1} style={[styles.eventMeta, { color: theme.muted.val }]}>{event.location}</Text>
+                        <Text numberOfLines={1} style={[styles.eventMeta, { color: theme.muted.val }]}>
+                          Còn {event.remainingSpots ?? Math.max(0, event.capacity - (event.registeredCount ?? 0))} chỗ
+                        </Text>
+                        <Text style={[styles.eventLink, { color: theme.primary.val }]}>Xem chi tiết</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={theme.muted.val} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              ListFooterComponent={(
+                <>
+                  <View style={styles.suggestions}>
+                    {suggestions.map((suggestion) => (
+                      <Pressable key={suggestion} onPress={() => void send(suggestion)} style={[styles.suggestion, { borderColor: theme.border.val }]}>
+                        <Text style={[styles.suggestionText, { color: theme.primary.val }]}>{suggestion}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {isSending ? <ActivityIndicator color={theme.primary.val} style={styles.loading} /> : null}
+                  {error ? <Text style={[styles.error, { color: theme.danger.val }]}>{error}</Text> : null}
+                </>
+              )}
+            />
+            <View style={[styles.inputRow, { borderTopColor: theme.border.val, backgroundColor: theme.surface.val }]}>
+              <TextInput
+                editable={!isSending}
+                onChangeText={setInput}
+                onSubmitEditing={() => void send()}
+                placeholder="Hỏi trợ lý..."
+                placeholderTextColor={theme.muted.val}
+                style={[styles.input, { color: theme.color.val }]}
+                value={input}
+                returnKeyType="send"
+              />
+              <Pressable accessibilityLabel="Gửi tin nhắn" disabled={!input.trim() || isSending} onPress={() => void send()} style={[styles.sendButton, { backgroundColor: theme.primary.val, opacity: input.trim() && !isSending ? 1 : 0.5 }]}>
+                <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  floatingButton: {
+    alignItems: 'center',
+    borderRadius: 28,
+    bottom: 184,
+    elevation: 5,
+    height: 56,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    width: 56,
+    zIndex: 10,
+  },
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '88%', overflow: 'hidden' },
+  header: { alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', justifyContent: 'space-between', padding: 16 },
+  headerTitle: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  avatar: { alignItems: 'center', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
+  title: { fontSize: 16, fontWeight: '700' },
+  subtitle: { fontSize: 12, marginTop: 2 },
+  messageList: { gap: 10, padding: 16 },
+  message: { borderRadius: 16, maxWidth: '86%', padding: 12 },
+  userMessage: { alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  assistantMessage: { alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+  messageText: { fontSize: 15, lineHeight: 21 },
+  eventCard: { alignItems: 'center', borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 10, marginTop: 8, padding: 8 },
+  eventImage: { borderRadius: 10, height: 64, width: 64 },
+  eventInfo: { flex: 1, gap: 3 },
+  eventTitle: { fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  eventMeta: { fontSize: 12 },
+  eventLink: { fontSize: 12, fontWeight: '600' },
+  suggestions: { gap: 8, marginTop: 8 },
+  suggestion: { borderRadius: 14, borderWidth: 1, padding: 10 },
+  suggestionText: { fontSize: 13 },
+  loading: { alignSelf: 'flex-start', margin: 8 },
+  error: { fontSize: 13, marginTop: 8 },
+  inputRow: { alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, padding: 12 },
+  input: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 10, paddingVertical: 8 },
+  sendButton: { alignItems: 'center', borderRadius: 20, height: 40, justifyContent: 'center', width: 40 },
+});

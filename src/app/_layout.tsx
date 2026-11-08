@@ -12,6 +12,7 @@ import { getSafeEventRedirect } from "@/utils/event-links";
 import { tamaguiConfig } from "../../tamagui.config";
 
 import { addNotificationResponseListener } from "@/services/notificationService";
+import { AIChatWidget } from "@/components/AIChatWidget";
 
 export default function RootLayout() {
   useEffect(() => {
@@ -58,6 +59,7 @@ function ThemedApp() {
                   options={{ animation: "slide_from_bottom" }}
                 />
               </Stack>
+              <AIChatWidget />
             </AuthProvider>
           </AppStateProvider>
         </TamaguiProvider>

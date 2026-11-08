@@ -12,6 +12,8 @@ export type StudentEvent = {
   organizer: string;
   image: ImageSourcePropType;
   capacity: number;
+  registeredCount?: number;
+  remainingSpots?: number;
   checkedInCount: number;
   summarySource: string;
 };
