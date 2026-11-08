@@ -30,6 +30,13 @@ export const createOrganizerSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#0D6EFD'),
 }).strict();
 
+export const updateOrganizerSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  shortName: z.string().trim().min(2).max(60).optional(),
+  description: z.string().trim().max(2000).optional(),
+  contactEmail: emailSchema.optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, 'At least one organizer field is required.');
+
 const eventFields = {
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().min(1).max(8000),

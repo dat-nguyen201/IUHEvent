@@ -19,6 +19,13 @@ function newEventId() {
   return `event-${crypto.randomUUID()}`;
 }
 
+function eventFilterForUser(user: UserDocument, eventId?: string): Filter<EventDocument> {
+  const filter: Filter<EventDocument> = {};
+  if (eventId) filter.id = eventId;
+  if (user.role === 'organizer') filter.organizer = user.organizerName || user.name;
+  return filter;
+}
+
 export function createAdminEventsRouter(db: Db) {
   const router = Router();
   const events = db.collection<EventDocument>('events');
@@ -29,7 +36,7 @@ export function createAdminEventsRouter(db: Db) {
     const pageSize = pageNumber(req.query.pageSize, 20, 100);
     const search = typeof req.query.query === 'string' ? req.query.query.trim() : '';
     const status = typeof req.query.status === 'string' ? req.query.status : '';
-    const filter: Filter<EventDocument> = {};
+    const filter = eventFilterForUser(req.authUser!);
     if (['draft', 'published', 'archived'].includes(status)) filter.status = status as EventDocument['status'];
     if (search) {
       const escaped = escapeRegExp(search);
@@ -93,13 +100,13 @@ export function createAdminEventsRouter(db: Db) {
   });
 
   router.get('/:eventId', async (req, res) => {
-    const event = await events.findOne({ id: req.params.eventId });
+    const event = await events.findOne(eventFilterForUser(req.authUser!, req.params.eventId));
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
     res.json({ data: toPublicEvent(event) });
   });
 
   router.get('/:eventId/attendance', async (req, res) => {
-    const event = await events.findOne({ id: req.params.eventId });
+    const event = await events.findOne(eventFilterForUser(req.authUser!, req.params.eventId));
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
 
     const registrations = db.collection<RegistrationDocument>('registrations');
@@ -132,7 +139,7 @@ export function createAdminEventsRouter(db: Db) {
   });
 
   router.get('/:eventId/export-csv', async (req, res) => {
-    const event = await events.findOne({ id: req.params.eventId });
+    const event = await events.findOne(eventFilterForUser(req.authUser!, req.params.eventId));
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
 
     const registrations = db.collection<RegistrationDocument>('registrations');
@@ -163,7 +170,7 @@ export function createAdminEventsRouter(db: Db) {
 
   router.patch('/:eventId/status', async (req, res) => {
     const { status } = eventStatusSchema.parse(req.body);
-    const event = await events.findOne({ id: req.params.eventId });
+    const event = await events.findOne(eventFilterForUser(req.authUser!, req.params.eventId));
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
 
     const now = new Date();
@@ -183,7 +190,7 @@ export function createAdminEventsRouter(db: Db) {
 
   router.patch('/:eventId', async (req, res) => {
     const input = updateEventSchema.parse(req.body);
-    const event = await events.findOne({ id: req.params.eventId });
+    const event = await events.findOne(eventFilterForUser(req.authUser!, req.params.eventId));
     if (!event) throw notFound('EVENT_NOT_FOUND', 'Không tìm thấy sự kiện.');
 
     if (input.capacity !== undefined && input.capacity < event.registeredCount) {

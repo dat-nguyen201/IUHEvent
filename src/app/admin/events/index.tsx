@@ -230,7 +230,7 @@ export default function AdminEventsScreen() {
         </View>
         <View style={styles.adminNav}>
           <View style={styles.adminNavItem}><AdminButton label="Thêm sự kiện" icon="add-circle-outline" onPress={() => router.push('/admin/events/new' as never)} /></View>
-          <View style={styles.adminNavItem}><AdminButton label="Đơn vị tổ chức" icon="business-outline" variant="secondary" onPress={() => router.push('/admin/organizers' as never)} /></View>
+          <View style={styles.adminNavItem}><AdminButton label={user?.role === 'organizer' ? 'Đơn vị của tôi' : 'Đơn vị tổ chức'} icon="business-outline" variant="secondary" onPress={() => router.push('/admin/organizers' as never)} /></View>
           {user?.role === 'admin' ? (
             <>
               <View style={styles.adminNavItem}><AdminButton label="Quản lý sinh viên" icon="people-outline" variant="secondary" onPress={() => router.push('/admin/users' as never)} /></View>
