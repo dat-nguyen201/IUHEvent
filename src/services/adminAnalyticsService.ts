@@ -1,7 +1,7 @@
 import { appMode } from '@/constants/app-mode';
-import { apiRequest } from '@/services/apiClient';
-import { getRemoteAccessToken } from '@/services/remoteAuthService';
+import { ApiError, apiRequest } from '@/services/apiClient';
 import { studentEvents } from '@/data/events';
+import { getRemoteAccessToken } from '@/services/remoteAuthService';
 
 export interface ReviewsAnalytics {
   totalReviews: number;
@@ -66,11 +66,20 @@ export interface AnalyticsSummary {
   reviewsSummary?: ReviewsAnalytics;
 }
 
+async function getAnalyticsToken(): Promise<string> {
+  const token = await getRemoteAccessToken();
+  if (!token) {
+    throw new ApiError('UNAUTHORIZED', 'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.', 401);
+  }
+  return token;
+}
+
 export async function getAdminAnalytics(): Promise<AnalyticsSummary> {
   if (appMode === 'remote') {
     try {
-      const token = await getRemoteAccessToken();
-      const response = await apiRequest<{ data: AnalyticsSummary }>('/api/admin/analytics', { token });
+      const response = await apiRequest<{ data: AnalyticsSummary }>('/api/admin/analytics', {
+        token: await getAnalyticsToken(),
+      });
       if (response?.data) return response.data;
     } catch (e) {
       console.warn('Could not fetch remote analytics, falling back to local computation:', e);
@@ -208,4 +217,18 @@ export async function getAdminAnalytics(): Promise<AnalyticsSummary> {
       ],
     },
   };
+}
+
+export async function getOrganizerAnalytics(): Promise<AnalyticsSummary> {
+  if (appMode !== 'remote') {
+    throw new Error('Thống kê đơn vị yêu cầu kết nối máy chủ.');
+  }
+
+  const response = await apiRequest<{ data: AnalyticsSummary }>('/api/admin/analytics', {
+    token: await getAnalyticsToken(),
+  });
+  if (!response?.data) {
+    throw new Error('Máy chủ không trả về dữ liệu thống kê.');
+  }
+  return response.data;
 }
