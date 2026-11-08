@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { MongoServerError, type Db, type Filter } from 'mongodb';
 
-import { conflict, forbidden, notFound } from '../lib/errors';
-import { checkInSchema, profileSchema } from '../lib/validation';
+import { badRequest, conflict, forbidden, notFound, unauthorized } from '../lib/errors';
+import { checkInSchema, changePasswordSchema, profileSchema } from '../lib/validation';
 import { requireAuth } from '../middleware/auth';
+import { hashPassword, signAccessToken, verifyPassword } from '../lib/security';
 import {
   toPublicEvent,
   toPublicUser,
@@ -35,6 +36,31 @@ export function createMeRouter(db: Db) {
     await users.updateOne({ _id: userId }, { $set: { ...input, updatedAt: new Date() } });
     const user = await users.findOne({ _id: userId });
     res.json({ user: toPublicUser(user!) });
+  });
+
+  router.patch('/password', async (req, res) => {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+    const currentUser = req.authUser!;
+    if (!(await verifyPassword(currentPassword, currentUser.passwordHash))) {
+      throw badRequest('CURRENT_PASSWORD_INVALID', 'Mật khẩu hiện tại chưa chính xác.');
+    }
+    if (await verifyPassword(newPassword, currentUser.passwordHash)) {
+      throw badRequest('SAME_PASSWORD', 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+    }
+
+    const nextVersion = (currentUser.credentialVersion ?? 0) + 1;
+    const result = await users.updateOne(
+      { _id: currentUser._id, passwordHash: currentUser.passwordHash },
+      { $set: { passwordHash: await hashPassword(newPassword), updatedAt: new Date() }, $inc: { credentialVersion: 1 } },
+    );
+    if (!result.modifiedCount) throw conflict('PASSWORD_CHANGED', 'Mật khẩu vừa được thay đổi ở nơi khác. Hãy đăng nhập lại.');
+
+    const updatedUser = await users.findOne({ _id: currentUser._id });
+    if (!updatedUser) throw unauthorized();
+    res.json({
+      accessToken: signAccessToken(currentUser._id.toHexString(), nextVersion),
+      user: toPublicUser(updatedUser),
+    });
   });
 
   router.get('/saved-events', async (req, res) => {

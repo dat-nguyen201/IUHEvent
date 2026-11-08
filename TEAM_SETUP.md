@@ -76,7 +76,19 @@ ADMIN_STUDENT_ID=ADMIN-001
 - Thay URI bằng URI Atlas thật. Nếu password có ký tự đặc biệt, URL-encode phần password.
 - Tạo `JWT_SECRET` ngẫu nhiên, dài ít nhất 32 ký tự. Mọi máy cùng chạy chung một API phải dùng cùng secret phía server. Không đặt secret này trong app Expo.
 - `ADMIN_PASSWORD` phải dài ít nhất 12 ký tự. Chỉ người vận hành backend cần điền biến này khi seed admin.
+- Để bật quên mật khẩu, cấu hình `RESEND_API_KEY` và `PASSWORD_RESET_FROM` theo mục bên dưới. API key chỉ nằm trong `server/.env`.
 - Không dùng nguyên giá trị ví dụ và không commit `server/.env`.
+
+### Cấu hình email khôi phục mật khẩu
+
+Remote mode gửi mã xác nhận 6 chữ số qua Resend Email API. Tạo API key trong tài khoản Resend, cấu hình địa chỉ gửi được Resend cho phép (địa chỉ onboarding chỉ dùng trong phạm vi thử nghiệm của Resend), rồi thêm vào `server/.env`:
+
+```env
+RESEND_API_KEY=re_xxxxxxxxx
+PASSWORD_RESET_FROM=IUH Event <onboarding@resend.dev>
+```
+
+Không đưa API key vào Expo `.env`, app mobile hoặc GitHub. Khi chưa cấu hình các biến này, endpoint quên mật khẩu báo chức năng chưa được cấu hình. Tham khảo [Resend Send Email API](https://resend.com/docs/api-reference/emails/send-email).
 
 ### Seed dữ liệu vào Atlas riêng của bạn
 

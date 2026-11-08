@@ -213,6 +213,18 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/change-password' as never)}
+          style={[styles.passwordButton, { borderColor: theme.border.val, backgroundColor: theme.surface.val }]}
+        >
+          <View style={styles.passwordButtonCopy}>
+            <Text style={[styles.passwordButtonTitle, { color: theme.color.val }]}>Đổi mật khẩu</Text>
+            <Text style={[styles.passwordButtonHint, { color: theme.muted.val }]}>Cập nhật thông tin bảo mật tài khoản</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={theme.muted.val} />
+        </Pressable>
+
         {appMode === "remote" &&
         user?.role === "admin" &&
         user.status === "active" ? (
@@ -788,6 +800,10 @@ const styles = StyleSheet.create({
   metricValue: { color: colors.text, fontSize: 21, fontWeight: "900" },
   metricLabel: { color: colors.mutedText, fontSize: 12 },
   adminAccess: { borderRadius: 14, padding: 18, gap: 6 },
+  passwordButton: { alignItems: "center", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, padding: 15 },
+  passwordButtonCopy: { flex: 1, gap: 4 },
+  passwordButtonTitle: { fontSize: 14, fontWeight: "800" },
+  passwordButtonHint: { fontSize: 12 },
   adminAccessTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
   adminAccessCaption: { color: "#FFFFFF", fontSize: 12 },
   offlineTicketCard: {

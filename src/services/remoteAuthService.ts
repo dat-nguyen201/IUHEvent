@@ -96,6 +96,31 @@ export async function loginRemoteAccount(emailInput: string, password: string) {
   return saveAuthResponse(response);
 }
 
+export async function changeRemotePassword(currentPassword: string, newPassword: string) {
+  const token = await getStoredValue(REMOTE_TOKEN_KEY);
+  if (!token) throw new ApiError('UNAUTHORIZED', 'Vui lòng đăng nhập lại.');
+  const response = await apiRequest<AuthResponse>('/api/me/password', {
+    method: 'PATCH',
+    token,
+    body: { currentPassword, newPassword },
+  });
+  return saveAuthResponse(response);
+}
+
+export async function requestRemotePasswordReset(emailInput: string) {
+  return apiRequest<{ message: string }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: { email: emailInput.trim().toLowerCase() },
+  });
+}
+
+export async function resetRemotePassword(emailInput: string, code: string, newPassword: string) {
+  return apiRequest<{ message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: { email: emailInput.trim().toLowerCase(), code: code.trim(), newPassword },
+  });
+}
+
 export async function getRemoteToken(): Promise<string | null> {
   return getStoredValue(REMOTE_TOKEN_KEY);
 }

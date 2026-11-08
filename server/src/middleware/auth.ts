@@ -12,19 +12,22 @@ export function requireAuth(db: Db): RequestHandler {
       const match = authorization?.match(/^Bearer\s+(.+)$/i);
       if (!match) throw unauthorized();
 
-      let userId: string;
+      let claims: ReturnType<typeof verifyAccessToken>;
       try {
-        userId = verifyAccessToken(match[1]);
+        claims = verifyAccessToken(match[1]);
       } catch {
         throw unauthorized('INVALID_TOKEN', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
       }
 
-      if (!ObjectId.isValid(userId)) {
+      if (!ObjectId.isValid(claims.userId)) {
         throw unauthorized('INVALID_TOKEN', 'Phiên đăng nhập không hợp lệ.');
       }
 
-      const user = await db.collection<UserDocument>('users').findOne({ _id: new ObjectId(userId) });
+      const user = await db.collection<UserDocument>('users').findOne({ _id: new ObjectId(claims.userId) });
       if (!user) throw unauthorized();
+      if ((user.credentialVersion ?? 0) !== claims.credentialVersion) {
+        throw unauthorized('SESSION_REVOKED', 'Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.');
+      }
       if (user.status !== 'active') {
         throw forbidden('ACCOUNT_SUSPENDED', 'Tài khoản đang bị khóa.');
       }

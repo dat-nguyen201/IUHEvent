@@ -10,11 +10,21 @@ export type UserDocument = {
   studentId: string;
   email: string;
   passwordHash: string;
+  credentialVersion?: number;
   major: string;
   role: UserRole;
   status: UserStatus;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type PasswordResetDocument = {
+  _id?: string;
+  userId: ObjectId;
+  codeHash: string;
+  attempts: number;
+  createdAt: Date;
+  expiresAt: Date;
 };
 
 export type StoredUser = WithId<UserDocument>;

@@ -34,5 +34,6 @@ export async function ensureIndexes(db: Db) {
     db.collection('reviews').createIndex({ userId: 1, eventId: 1 }),
     db.collection('notifications').createIndex({ userId: 1, createdAt: -1 }),
     db.collection('notifications').createIndex({ userId: 1, read: 1 }),
+    db.collection('passwordResets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: 'password_reset_expiry_ttl' }),
   ]);
 }

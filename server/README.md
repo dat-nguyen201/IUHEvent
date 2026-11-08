@@ -11,6 +11,8 @@ Express API and MongoDB Atlas backend for the remote app mode. The Expo app must
 5. Set `ADMIN_EMAIL`, `ADMIN_PASSWORD` (at least 12 characters), `ADMIN_NAME`, and `ADMIN_STUDENT_ID`, then run `npm run seed:admin`.
 6. Start the API with `npm run dev`. Health check: `GET http://localhost:3000/health`.
 
+To enable email password recovery, also configure `RESEND_API_KEY` and `PASSWORD_RESET_FROM` in `server/.env`. Keep the Resend key on the server only. Without these values, the API reports password recovery as not configured.
+
 The admin seed script never prints or stores its password in source control. Re-running it is safe; it does not overwrite an existing admin account.
 
 ## Scripts

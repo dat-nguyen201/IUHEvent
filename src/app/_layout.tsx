@@ -49,6 +49,8 @@ function ThemedApp() {
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="auth" />
+                <Stack.Screen name="forgot-password" />
+                <Stack.Screen name="change-password" />
                 <Stack.Screen name="get-started" />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="admin" />
@@ -86,6 +88,7 @@ function RouteGuard() {
       route === "(tabs)" ||
       route === "events" ||
       route === "check-in" ||
+      route === "change-password" ||
       route === "admin" ||
       route === "admin-users";
 

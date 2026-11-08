@@ -64,6 +64,10 @@
 | `POST /api/auth/register` | Công khai | `{ name, studentId, email, password }` | `201 { accessToken, user }`; tài khoản mới luôn có role `student`, status `active` |
 | `POST /api/auth/login` | Công khai | `{ email, password }` | `200 { accessToken, user }` |
 | `GET /api/auth/me` | Bearer | Không có | `200 { user }` |
+| `POST /api/auth/forgot-password` | Công khai | `{ email }` | `200 { message }`; phản hồi chung để không tiết lộ email có tài khoản hay không |
+| `POST /api/auth/reset-password` | Công khai | `{ email, code, newPassword }` | `200 { message }`; code 6 số, hết hạn sau 10 phút, tối đa 5 lần nhập sai |
+
+Gửi mã qua Resend Email API. Backend cần `RESEND_API_KEY` và `PASSWORD_RESET_FROM`; các endpoint reset có giới hạn tần suất. Mã chỉ lưu dạng HMAC, dùng một lần; sau khi đặt lại, các phiên cũ bị thu hồi và người dùng đăng nhập lại.
 
 Giới hạn đăng ký: `name` 2–120 ký tự, `studentId` 2–32, email hợp lệ tối đa 254, password 8–128 ký tự. Email được chuẩn hóa chữ thường; mã sinh viên được chuẩn hóa chữ hoa. Email và mã sinh viên phải duy nhất.
 
@@ -75,6 +79,14 @@ Giới hạn đăng ký: `name` 2–120 ký tự, `studentId` 2–32, email hợ
 | `PATCH /api/me/profile` | Bearer | Một hoặc nhiều trường `name`, `studentId`, `major` | `200 { user }` |
 
 Chỉ cho phép sửa các trường hồ sơ nêu trên; không nhận `role`, `status`, email hoặc mật khẩu. Các chuỗi hồ sơ phải dài 2–120 ký tự (mã sinh viên tối đa 32).
+
+### Mật khẩu
+
+| Method và path | Quyền | Request | Response thành công |
+|---|---|---|---|
+| `PATCH /api/me/password` | Bearer | `{ currentPassword, newPassword }` | `200 { accessToken, user }` |
+
+Mật khẩu mới dài 8–128 ký tự, phải khác mật khẩu hiện tại. Token trả về thay thế phiên hiện tại; các token cũ bị thu hồi. Mật khẩu chỉ được lưu dưới dạng bcrypt hash.
 
 ## Sự kiện công khai
 
@@ -134,8 +146,8 @@ Các lỗi có dạng `{ code, message }`; lỗi validation có thể thêm `det
 
 | HTTP | Code thường gặp | Ý nghĩa |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | Thiếu/sai trường hoặc dữ liệu không hợp lệ |
-| `401` | `UNAUTHORIZED`, `INVALID_CREDENTIALS` | Thiếu/hết hạn token hoặc thông tin đăng nhập sai |
+| `400` | `VALIDATION_ERROR`, `SAME_PASSWORD`, `CURRENT_PASSWORD_INVALID` | Thiếu/sai trường, mật khẩu mới trùng hoặc mật khẩu hiện tại không đúng |
+| `401` | `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `INVALID_RESET_CODE`, `SESSION_REVOKED` | Thiếu/hết hạn token, thông tin đăng nhập/mã khôi phục sai, hoặc token cũ bị thu hồi |
 | `403` | `FORBIDDEN`, `ACCOUNT_SUSPENDED`, `INVALID_QR` | Không đủ quyền, tài khoản bị khóa hoặc QR không hợp lệ |
 | `404` | `ROUTE_NOT_FOUND`, `EVENT_NOT_FOUND`, `USER_NOT_FOUND`, `REGISTRATION_NOT_FOUND` | Không tìm thấy route/tài nguyên |
 | `409` | `EMAIL_EXISTS`, `STUDENT_ID_EXISTS`, `ALREADY_REGISTERED`, `ALREADY_CHECKED_IN`, `EVENT_FULL`, `EVENT_EXPIRED`, `REGISTRATION_REQUIRED`, `CAPACITY_BELOW_REGISTRATIONS`, `CANNOT_SUSPEND_SELF`, `LAST_ACTIVE_ADMIN` | Xung đột trạng thái/dữ liệu |

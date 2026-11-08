@@ -133,6 +133,27 @@ export async function loginDemoAccount(emailInput: string, password: string) {
   return account.user;
 }
 
+export async function changeDemoPassword(emailInput: string, currentPassword: string, newPassword: string) {
+  const email = emailInput.trim().toLowerCase();
+  const session = await getStoredValue(SESSION_KEY);
+  if (session === ADMIN_SESSION || email === adminUser.email) {
+    throw new Error('DEMO_ADMIN_PASSWORD_FIXED');
+  }
+  if (session !== email) throw new Error('NOT_AUTHENTICATED');
+
+  const account = await getAccount(email);
+  if (!account || (await hashPassword(currentPassword, account.salt)) !== account.passwordHash) {
+    throw new Error('CURRENT_PASSWORD_INVALID');
+  }
+  if ((await hashPassword(newPassword, account.salt)) === account.passwordHash) {
+    throw new Error('SAME_PASSWORD');
+  }
+
+  const salt = Array.from(await Crypto.getRandomBytesAsync(16), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const updated = { ...account, salt, passwordHash: await hashPassword(newPassword, salt) };
+  await setStoredValue(await accountStorageKey(email), JSON.stringify(updated));
+}
+
 export async function logoutDemoAccount() {
   await removeStoredValue(SESSION_KEY);
 }
