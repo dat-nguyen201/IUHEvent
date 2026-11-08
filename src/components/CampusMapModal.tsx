@@ -18,6 +18,7 @@ import {
   CAMPUS_BUILDINGS,
   resolveCampusLocation,
   type CampusBuildingCode,
+  type CampusRegion,
 } from "@/utils/campusLocation";
 
 interface CampusMapModalProps {
@@ -34,7 +35,17 @@ const GOOGLE_DIRECTIONS_URL = `https://www.google.com/maps/dir/?api=1&destinatio
 )}&dir_action=navigate`;
 
 const MAP_SOURCE = require("@/assets/campus-map-iuh.png");
-const MAP_RATIO = 2048 / 1536;
+
+// Ảnh sơ đồ IUH mới có tỷ lệ 4:3
+const MAP_RATIO = 4 / 3;
+
+const percent = (value: number): `${number}%` => `${value}%`;
+const regionStyle = (region: CampusRegion) => ({
+  left: percent(region.x),
+  top: percent(region.y),
+  width: percent(region.width),
+  height: percent(region.height),
+});
 
 export function CampusMapModal({
   visible,
@@ -71,8 +82,8 @@ export function CampusMapModal({
   useEffect(() => {
     if (!visible || mode !== "campus" || !selectedBuilding || !viewportWidth)
       return;
-    const centerPercent =
-      selectedBuilding.region.x + selectedBuilding.region.width / 2;
+    const firstRegion = selectedBuilding.regions[0];
+    const centerPercent = firstRegion.x + firstRegion.width / 2;
     const offset = (centerPercent / 100) * mapWidth - viewportWidth / 2;
     const timeout = setTimeout(() => {
       mapScrollRef.current?.scrollTo({
@@ -260,52 +271,37 @@ export function CampusMapModal({
                         resizeMode="stretch"
                         accessibilityLabel="Sơ đồ khuôn viên Đại học Công nghiệp TP.HCM"
                       />
-                      {selectedBuilding && (
+                      {selectedBuilding?.regions.map((region, index) => (
                         <View
+                          key={`${selectedBuilding.code}-highlight-${index}`}
                           pointerEvents="none"
-                          style={[
-                            styles.selectedRegion,
-                            {
-                              left: `${selectedBuilding.region.x}%` as `${number}%`,
-                              top: `${selectedBuilding.region.y}%` as `${number}%`,
-                              width:
-                                `${selectedBuilding.region.width}%` as `${number}%`,
-                              height:
-                                `${selectedBuilding.region.height}%` as `${number}%`,
-                            },
-                          ]}
+                          style={[styles.selectedRegion, regionStyle(region)]}
                         >
-                          <View style={styles.selectedMarker}>
-                            <Ionicons
-                              name="location-sharp"
-                              color="#B91C1C"
-                              size={22}
-                            />
-                            <Text style={styles.selectedMarkerLabel}>
-                              {selectedBuilding.code}
-                            </Text>
-                          </View>
+                          {index === 0 && (
+                            <View style={styles.selectedMarker}>
+                              <Ionicons
+                                name="location-sharp"
+                                color="#7C2D12"
+                                size={16}
+                              />
+                              <Text style={styles.selectedMarkerLabel}>
+                                {selectedBuilding.code}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                      )}
-                      {CAMPUS_BUILDINGS.map((building) => (
-                        <Pressable
-                          key={building.code}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Xem vị trí ${building.label}`}
-                          onPress={() => onPickBuilding(building.code)}
-                          style={[
-                            styles.mapTouchTarget,
-                            {
-                              left: `${building.region.x}%` as `${number}%`,
-                              top: `${building.region.y}%` as `${number}%`,
-                              width:
-                                `${building.region.width}%` as `${number}%`,
-                              height:
-                                `${building.region.height}%` as `${number}%`,
-                            },
-                          ]}
-                        />
                       ))}
+                      {CAMPUS_BUILDINGS.flatMap((building) =>
+                        building.regions.map((region, index) => (
+                          <Pressable
+                            key={`${building.code}-touch-${index}`}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Xem vị trí ${building.label}`}
+                            onPress={() => onPickBuilding(building.code)}
+                            style={[styles.mapTouchTarget, regionStyle(region)]}
+                          />
+                        )),
+                      )}
                     </View>
                   </ScrollView>
                 </View>
@@ -552,24 +548,27 @@ const styles = StyleSheet.create({
   mapImage: { width: "100%", height: "100%" },
   selectedRegion: {
     position: "absolute",
-    borderColor: "#FDE047",
-    backgroundColor: "rgba(250,204,21,0.26)",
-    borderWidth: 5,
-    borderRadius: 900,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 7,
+    borderColor: "#FACC15",
+    backgroundColor: "rgba(250,204,21,0.18)",
+    borderWidth: 3,
+    borderRadius: 6,
   },
   selectedMarker: {
+    position: "absolute",
+    right: -8,
+    top: -13,
+    flexDirection: "row",
     alignItems: "center",
-    borderRadius: 7,
-    padding: 3,
-    backgroundColor: "rgba(255,255,255,0.95)",
+    gap: 2,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "#92400E",
+    backgroundColor: "#FDE68A",
+    elevation: 5,
   },
-  selectedMarkerLabel: { fontSize: 16, fontWeight: "900", color: "#991B1B" },
+  selectedMarkerLabel: { fontSize: 13, fontWeight: "900", color: "#78350F" },
   mapTouchTarget: { position: "absolute" },
   buildingPicker: { gap: 8, paddingVertical: 2 },
   buildingChip: {
