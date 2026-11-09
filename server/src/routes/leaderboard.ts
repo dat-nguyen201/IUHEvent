@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Db } from 'mongodb';
 
+import { verifyAccessToken } from '../lib/security';
 import type { RegistrationDocument, UserDocument } from '../types/domain';
 
 export interface LeaderboardStudent {
@@ -12,6 +13,14 @@ export interface LeaderboardStudent {
   drlPoints: number;
   checkedInCount: number;
   avatarUrl?: string;
+  badge: string;
+}
+
+export interface CurrentUserRankInfo {
+  rank: number;
+  totalStudents: number;
+  drlPoints: number;
+  checkedInCount: number;
   badge: string;
 }
 
@@ -28,10 +37,23 @@ export function createLeaderboardRouter(db: Db) {
   const users = db.collection<UserDocument>('users');
   const registrations = db.collection<RegistrationDocument>('registrations');
 
-  router.get('/', async (_req, res) => {
+  router.get('/', async (req, res) => {
     try {
-      // 1. Fetch students
-      const studentUsers = await users.find({ role: 'student' }).toArray();
+      // Check optional auth token to identify current user
+      let currentUserId: string | null = null;
+      const authorization = req.get('authorization');
+      const match = authorization?.match(/^Bearer\s+(.+)$/i);
+      if (match) {
+        try {
+          const claims = verifyAccessToken(match[1]);
+          currentUserId = claims.userId;
+        } catch {
+          // Ignore invalid/expired token for leaderboard read
+        }
+      }
+
+      // 1. Fetch all active users (including students & testing accounts)
+      const allActiveUsers = await users.find({ status: 'active' }).toArray();
 
       // 2. Fetch all checked-in registrations
       const checkIns = await registrations.find({ status: 'checked-in' }).toArray();
@@ -43,8 +65,8 @@ export function createLeaderboardRouter(db: Db) {
         checkInCountMap.set(uid, (checkInCountMap.get(uid) || 0) + 1);
       }
 
-      // Map students with DRL points (base 65 + 5 points per event)
-      const studentsList: LeaderboardStudent[] = studentUsers.map((u) => {
+      // Map users with DRL points (base 65 + 5 points per event)
+      const studentsList: LeaderboardStudent[] = allActiveUsers.map((u) => {
         const uid = u._id.toHexString();
         const checkedInCount = checkInCountMap.get(uid) || 0;
         const drlPoints = Math.min(100, 65 + checkedInCount * 5);
@@ -58,22 +80,41 @@ export function createLeaderboardRouter(db: Db) {
           rank: 1,
           userId: uid,
           name: u.name,
-          studentId: u.studentId,
-          major: u.major || 'Công nghệ thông tin',
+          studentId: u.studentId || (u.role === 'admin' ? 'ADMIN' : 'BTC'),
+          major: u.major || (u.role === 'admin' ? 'Ban Quản trị IUH' : 'Khoa Công nghệ Thông tin'),
           drlPoints,
           checkedInCount,
           badge,
         };
       });
 
-      // Sort by DRL points desc, then check-in count desc
-      studentsList.sort((a, b) => b.drlPoints - a.drlPoints || b.checkedInCount - a.checkedInCount);
+      // Deterministic sort: drlPoints desc, checkedInCount desc, userId asc
+      studentsList.sort(
+        (a, b) => b.drlPoints - a.drlPoints || b.checkedInCount - a.checkedInCount || a.userId.localeCompare(b.userId),
+      );
 
-      // Assign ranks
-      const topStudents = studentsList.slice(0, 30).map((s, idx) => ({
-        ...s,
-        rank: idx + 1,
-      }));
+      // Assign exact ranks
+      studentsList.forEach((s, idx) => {
+        s.rank = idx + 1;
+      });
+
+      // Top 30 for leaderboard podium and list
+      const topStudents = studentsList.slice(0, 30);
+
+      // Exact current user ranking info
+      let currentUser: CurrentUserRankInfo | null = null;
+      if (currentUserId) {
+        const found = studentsList.find((s) => s.userId === currentUserId);
+        if (found) {
+          currentUser = {
+            rank: found.rank,
+            totalStudents: studentsList.length,
+            drlPoints: found.drlPoints,
+            checkedInCount: found.checkedInCount,
+            badge: found.badge,
+          };
+        }
+      }
 
       // Faculty statistics
       const facultyMap: Record<string, { participants: Set<string>; checkIns: number; totalDrl: number }> = {};
@@ -105,6 +146,7 @@ export function createLeaderboardRouter(db: Db) {
         data: {
           topStudents,
           facultyRankings,
+          currentUser,
           updatedAt: new Date().toISOString(),
         },
       });

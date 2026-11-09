@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -16,23 +17,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@tamagui/core";
 import {
   CAMPUS_BUILDINGS,
+  IUH_CAMPUSES,
   resolveCampusLocation,
   type CampusBuildingCode,
   type CampusRegion,
+  type IUHCampusId,
 } from "@/utils/campusLocation";
+import { resolveEventCampusLocationAI } from "@/services/aiChatService";
 
 interface CampusMapModalProps {
   visible: boolean;
   locationName: string;
+  eventTitle?: string;
+  eventDescription?: string;
   onClose: () => void;
 }
 
 type ViewMode = "campus" | "directions";
-
-const IUH_ADDRESS = "12 Nguyễn Văn Bảo, Phường Hạnh Thông, TP. Hồ Chí Minh";
-const GOOGLE_DIRECTIONS_URL = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-  "Trường Đại học Công nghiệp Thành phố Hồ Chí Minh, 12 Nguyễn Văn Bảo, TP. Hồ Chí Minh",
-)}&dir_action=navigate`;
 
 const MAP_SOURCE = require("@/assets/campus-map-iuh.png");
 
@@ -50,20 +51,29 @@ const regionStyle = (region: CampusRegion) => ({
 export function CampusMapModal({
   visible,
   locationName,
+  eventTitle,
+  eventDescription,
   onClose,
 }: CampusMapModalProps) {
   const theme = useTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const suggested = useMemo(
-    () => resolveCampusLocation(locationName),
-    [locationName],
+
+  const syncSuggested = useMemo(
+    () => resolveCampusLocation(locationName, `${eventTitle || ""} ${eventDescription || ""}`),
+    [locationName, eventTitle, eventDescription],
   );
+
   const [mode, setMode] = useState<ViewMode>("campus");
+  const [selectedCampusId, setSelectedCampusId] = useState<IUHCampusId>(
+    syncSuggested.campus.id,
+  );
   const [selectedCode, setSelectedCode] = useState<CampusBuildingCode | null>(
-    suggested.code,
+    syncSuggested.code,
   );
   const [viewportWidth, setViewportWidth] = useState(0);
   const mapScrollRef = useRef<ScrollViewInstance>(null);
+
+  const currentCampus = IUH_CAMPUSES[selectedCampusId] || IUH_CAMPUSES.main;
 
   // Ảnh được mở rộng để có thể đọc rõ chữ và kéo ngang trên điện thoại.
   const mapWidth = Math.max(760, Math.min(screenWidth - 44, 1060));
@@ -72,12 +82,43 @@ export function CampusMapModal({
     (b) => b.code === selectedCode,
   );
 
+  // Khi modal mở: Khởi tạo giá trị đồng bộ ngay lập tức và phân tích ngầm
   useEffect(() => {
-    if (visible) {
+    if (!visible) return;
+
+    const initial = resolveCampusLocation(
+      locationName,
+      `${eventTitle || ""} ${eventDescription || ""}`,
+    );
+    setSelectedCampusId(initial.campus.id);
+    setSelectedCode(initial.code);
+
+    // Nếu là cơ sở vệ tinh (không có sơ đồ toà nhà nội bộ), mặc định mở tab chỉ đường
+    if (!initial.campus.hasInternalMap) {
+      setMode("directions");
+    } else {
       setMode("campus");
-      setSelectedCode(suggested.code);
     }
-  }, [visible, suggested.code, locationName]);
+
+    // Phân tích ngầm bằng backend service
+    let isCancelled = false;
+    void resolveEventCampusLocationAI(locationName, {
+      title: eventTitle,
+      description: eventDescription,
+    })
+      .then((data) => {
+        if (isCancelled) return;
+        setSelectedCampusId(data.campusId);
+        if (data.buildingCode) {
+          setSelectedCode(data.buildingCode as CampusBuildingCode);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [visible, locationName, eventTitle, eventDescription]);
 
   useEffect(() => {
     if (!visible || mode !== "campus" || !selectedBuilding || !viewportWidth)
@@ -96,7 +137,7 @@ export function CampusMapModal({
 
   const openGoogleMaps = async () => {
     try {
-      await Linking.openURL(GOOGLE_DIRECTIONS_URL);
+      await Linking.openURL(currentCampus.directionsUrl);
     } catch {
       Alert.alert(
         "Không mở được Google Maps",
@@ -108,6 +149,10 @@ export function CampusMapModal({
   const onPickBuilding = (code: CampusBuildingCode) => {
     setSelectedCode(code);
   };
+
+  const allCampusList = (Object.keys(IUH_CAMPUSES) as IUHCampusId[]).map(
+    (id) => IUH_CAMPUSES[id],
+  );
 
   return (
     <Modal
@@ -126,6 +171,7 @@ export function CampusMapModal({
             },
           ]}
         >
+          {/* Header */}
           <View style={styles.header}>
             <Image
               source={require("@/IMG/logo.png")}
@@ -133,11 +179,11 @@ export function CampusMapModal({
               resizeMode="contain"
             />
             <View style={styles.headerCopy}>
-              <Text style={[styles.eyebrow, { color: theme.primary.val }]}>
-                CAMPUS SMART NAVIGATION
+              <Text style={[styles.title, { color: theme.color.val }]} numberOfLines={1}>
+                {currentCampus.name}
               </Text>
-              <Text style={[styles.title, { color: theme.color.val }]}>
-                Sơ đồ & chỉ đường IUH
+              <Text style={[styles.headerSubtitle, { color: theme.muted.val }]} numberOfLines={1}>
+                {currentCampus.address}
               </Text>
             </View>
             <Pressable
@@ -150,69 +196,73 @@ export function CampusMapModal({
             </Pressable>
           </View>
 
-          <View
-            style={[
-              styles.modeTabs,
-              {
-                backgroundColor: theme.background.val,
-                borderColor: theme.border.val,
-              },
-            ]}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === "campus" }}
-              onPress={() => setMode("campus")}
+          {/* Mode Switcher Tabs for Main Campus */}
+          {currentCampus.hasInternalMap && (
+            <View
               style={[
-                styles.modeTab,
-                mode === "campus" && { backgroundColor: theme.primary.val },
+                styles.modeTabs,
+                {
+                  backgroundColor: theme.background.val,
+                  borderColor: theme.border.val,
+                },
               ]}
             >
-              <Ionicons
-                name="map-outline"
-                size={17}
-                color={mode === "campus" ? "#FFFFFF" : theme.color.val}
-              />
-              <Text
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === "campus" }}
+                onPress={() => setMode("campus")}
                 style={[
-                  styles.modeTabText,
-                  { color: mode === "campus" ? "#FFFFFF" : theme.color.val },
+                  styles.modeTab,
+                  mode === "campus" && { backgroundColor: theme.primary.val },
                 ]}
               >
-                Trong trường
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: mode === "directions" }}
-              onPress={() => setMode("directions")}
-              style={[
-                styles.modeTab,
-                mode === "directions" && { backgroundColor: theme.primary.val },
-              ]}
-            >
-              <Ionicons
-                name="navigate-outline"
-                size={17}
-                color={mode === "directions" ? "#FFFFFF" : theme.color.val}
-              />
-              <Text
+                <Ionicons
+                  name="map-outline"
+                  size={17}
+                  color={mode === "campus" ? "#FFFFFF" : theme.color.val}
+                />
+                <Text
+                  style={[
+                    styles.modeTabText,
+                    { color: mode === "campus" ? "#FFFFFF" : theme.color.val },
+                  ]}
+                >
+                  Sơ đồ tòa nhà
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: mode === "directions" }}
+                onPress={() => setMode("directions")}
                 style={[
-                  styles.modeTabText,
-                  {
-                    color: mode === "directions" ? "#FFFFFF" : theme.color.val,
-                  },
+                  styles.modeTab,
+                  mode === "directions" && { backgroundColor: theme.primary.val },
                 ]}
               >
-                Đến IUH
-              </Text>
-            </Pressable>
-          </View>
+                <Ionicons
+                  name="navigate-outline"
+                  size={17}
+                  color={mode === "directions" ? "#FFFFFF" : theme.color.val}
+                />
+                <Text
+                  style={[
+                    styles.modeTabText,
+                    {
+                      color: mode === "directions" ? "#FFFFFF" : theme.color.val,
+                    },
+                  ]}
+                >
+                  Chỉ đường Google Maps
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           <ScrollView
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
           >
+            {/* Event Location Box */}
             <View
               style={[
                 styles.eventBox,
@@ -239,12 +289,12 @@ export function CampusMapModal({
               </View>
             </View>
 
-            {mode === "campus" ? (
+            {mode === "campus" && currentCampus.hasInternalMap ? (
               <>
                 <Text
                   style={[styles.sectionHeading, { color: theme.color.val }]}
                 >
-                  Sơ đồ các tòa nhà
+                  Sơ đồ các tòa nhà (Trụ sở chính)
                 </Text>
                 <Text style={[styles.instructions, { color: theme.muted.val }]}>
                   Kéo ngang sơ đồ để xem toàn cảnh. Chạm vào tòa nhà hoặc chọn
@@ -351,14 +401,14 @@ export function CampusMapModal({
                   ))}
                 </ScrollView>
 
-                {suggested.warning && (
+                {syncSuggested.warning && (
                   <View style={styles.warningBox}>
                     <Ionicons
                       name="alert-circle-outline"
                       size={19}
                       color="#92400E"
                     />
-                    <Text style={styles.warningText}>{suggested.warning}</Text>
+                    <Text style={styles.warningText}>{syncSuggested.warning}</Text>
                   </View>
                 )}
 
@@ -381,7 +431,7 @@ export function CampusMapModal({
                       style={[styles.guideTitle, { color: theme.color.val }]}
                     >
                       {selectedBuilding
-                        ? suggested.code === selectedCode
+                        ? syncSuggested.code === selectedCode
                           ? selectedBuilding.label
                           : `Khu tham khảo: ${selectedBuilding.label}`
                         : "Hướng dẫn tìm địa điểm"}
@@ -391,18 +441,18 @@ export function CampusMapModal({
                     {selectedBuilding?.note ??
                       "Chọn một tòa nhà trên sơ đồ để xem vùng đánh dấu và hướng dẫn."}
                   </Text>
-                  {suggested.code === selectedCode && suggested.room && (
+                  {syncSuggested.code === selectedCode && syncSuggested.room && (
                     <Text
                       style={[styles.roomText, { color: theme.primary.val }]}
                     >
-                      Phòng sự kiện: {suggested.room}
+                      Phòng sự kiện: {syncSuggested.room}
                     </Text>
                   )}
-                  {suggested.code === selectedCode && suggested.floorHint && (
+                  {syncSuggested.code === selectedCode && syncSuggested.floorHint && (
                     <Text
                       style={[styles.guideText, { color: theme.color.val }]}
                     >
-                      {suggested.floorHint}
+                      {syncSuggested.floorHint}
                     </Text>
                   )}
                   <Text style={[styles.disclaimer, { color: theme.muted.val }]}>
@@ -413,6 +463,7 @@ export function CampusMapModal({
                 </View>
               </>
             ) : (
+              /* Directions View with Dynamic Campus */
               <View style={styles.directionsContent}>
                 <View
                   style={[
@@ -429,23 +480,43 @@ export function CampusMapModal({
                 <Text
                   style={[styles.directionsHeading, { color: theme.color.val }]}
                 >
-                  Chỉ đường đến cơ sở chính IUH
+                  Chỉ đường đến {currentCampus.name}
                 </Text>
                 <Text
                   style={[styles.directionsAddress, { color: theme.muted.val }]}
                 >
-                  {IUH_ADDRESS}
+                  {currentCampus.address}
                 </Text>
+
+                <View
+                  style={[
+                    styles.transportTipBox,
+                    {
+                      backgroundColor: theme.background.val,
+                      borderColor: theme.border.val,
+                    },
+                  ]}
+                >
+                  <Ionicons name="bus-outline" size={19} color={theme.primary.val} />
+                  <View style={styles.flex}>
+                    <Text style={[styles.transportTipTitle, { color: theme.color.val }]}>
+                      Hướng dẫn di chuyển
+                    </Text>
+                    <Text style={[styles.transportTipText, { color: theme.muted.val }]}>
+                      {currentCampus.transportHint}
+                    </Text>
+                  </View>
+                </View>
+
                 <Text
                   style={[
                     styles.guideText,
                     { color: theme.color.val, textAlign: "center" },
                   ]}
                 >
-                  Google Maps sẽ mở với điểm đến là IUH. Nếu thiết bị cho phép
-                  truy cập vị trí, Google Maps có thể lấy vị trí hiện tại làm
-                  điểm xuất phát; nếu không, bạn có thể chọn điểm xuất phát thủ
-                  công.
+                  Google Maps sẽ tự động mở với điểm đến là{" "}
+                  <Text style={{ fontWeight: "700" }}>{currentCampus.shortName}</Text>.
+                  Ứng dụng sẽ tự động chọn lộ trình tối ưu từ vị trí hiện tại của bạn.
                 </Text>
                 <Pressable
                   accessibilityRole="button"
@@ -457,13 +528,14 @@ export function CampusMapModal({
                 >
                   <Ionicons name="navigate" size={19} color="#FFFFFF" />
                   <Text style={styles.actionText}>
-                    Mở Google Maps chỉ đường
+                    Mở Google Maps chỉ đường đến {currentCampus.badge}
                   </Text>
                 </Pressable>
               </View>
             )}
           </ScrollView>
 
+          {/* Bottom Fixed Action Button */}
           {mode === "campus" && (
             <Pressable
               accessibilityRole="button"
@@ -475,7 +547,7 @@ export function CampusMapModal({
             >
               <Ionicons name="navigate-outline" size={18} color="#FFFFFF" />
               <Text style={styles.actionText}>
-                Chỉ đường tới IUH bằng Google Maps
+                Chỉ đường tới {currentCampus.shortName} bằng Google Maps
               </Text>
             </Pressable>
           )}
@@ -488,150 +560,346 @@ export function CampusMapModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.72)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.65)",
+    justifyContent: "flex-end",
   },
   card: {
-    flexShrink: 1,
-    width: "100%",
-    maxWidth: 780,
-    height: "96%",
+    maxHeight: "92%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 12,
-    gap: 12,
+    borderBottomWidth: 0,
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
   },
-  header: { flexDirection: "row", alignItems: "center", gap: 9 },
-  logo: { width: 38, height: 38 },
-  headerCopy: { flex: 1 },
-  eyebrow: { fontSize: 10, fontWeight: "800", letterSpacing: 0.4 },
-  title: { fontSize: 17, fontWeight: "900" },
-  closeButton: { padding: 4 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  logo: {
+    width: 36,
+    height: 36,
+    marginRight: 10,
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  closeButton: {
+    padding: 4,
+  },
   modeTabs: {
     flexDirection: "row",
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 1,
     padding: 4,
-    gap: 4,
+    marginBottom: 12,
   },
   modeTab: {
     flex: 1,
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
+    justifyContent: "center",
+    paddingVertical: 9,
     borderRadius: 10,
+    gap: 6,
   },
-  modeTabText: { fontWeight: "800", fontSize: 13 },
-  content: { paddingBottom: 12, gap: 12 },
+  modeTabText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  content: {
+    paddingBottom: 20,
+    gap: 12,
+  },
   eventBox: {
     flexDirection: "row",
-    gap: 9,
     alignItems: "center",
-    borderRadius: 13,
-    padding: 10,
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  flex: { flex: 1 },
-  minorLabel: { fontSize: 10, fontWeight: "800" },
-  eventLocation: { fontSize: 14, fontWeight: "800", marginTop: 2 },
-  sectionHeading: { fontSize: 15, fontWeight: "900" },
-  instructions: { fontSize: 12, lineHeight: 18 },
-  mapFrame: { borderWidth: 1, overflow: "hidden", borderRadius: 14 },
-  mapScrollContent: { alignItems: "flex-start" },
-  mapImage: { width: "100%", height: "100%" },
+  flex: {
+    flex: 1,
+  },
+  minorLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  eventLocation: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  aiInsightBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+    borderWidth: 1,
+  },
+  aiInsightTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#92400E",
+    marginBottom: 2,
+  },
+  aiInsightText: {
+    fontSize: 12,
+    color: "#78350F",
+    lineHeight: 17,
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  instructions: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  mapFrame: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    backgroundColor: "#F8FAFC",
+  },
+  mapScrollContent: {
+    alignItems: "center",
+  },
+  mapImage: {
+    width: "100%",
+    height: "100%",
+  },
   selectedRegion: {
     position: "absolute",
-    borderColor: "#FACC15",
-    backgroundColor: "rgba(250,204,21,0.18)",
-    borderWidth: 3,
     borderRadius: 6,
+    borderWidth: 3,
+    borderColor: "#EAB308",
+    backgroundColor: "rgba(250, 204, 21, 0.45)",
   },
   selectedMarker: {
     position: "absolute",
-    right: -8,
-    top: -13,
+    top: -20,
+    left: "50%",
+    transform: [{ translateX: -12 }],
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    borderRadius: 8,
+    backgroundColor: "#FEF08A",
     paddingHorizontal: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#92400E",
-    backgroundColor: "#FDE68A",
-    elevation: 5,
+    borderColor: "#CA8A04",
   },
-  selectedMarkerLabel: { fontSize: 13, fontWeight: "900", color: "#78350F" },
-  mapTouchTarget: { position: "absolute" },
-  buildingPicker: { gap: 8, paddingVertical: 2 },
+  selectedMarkerLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#713F12",
+  },
+  mapTouchTarget: {
+    position: "absolute",
+  },
+  buildingPicker: {
+    gap: 8,
+    paddingVertical: 4,
+  },
   buildingChip: {
-    minWidth: 44,
-    alignItems: "center",
     paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderWidth: 1.5,
-    borderRadius: 20,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  buildingChipText: { fontWeight: "900", fontSize: 13 },
+  buildingChipText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
   warningBox: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 8,
-    backgroundColor: "#FEF3C7",
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
+    backgroundColor: "#FEF3C7",
   },
-  warningText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#78350F" },
-  guideBox: { borderWidth: 1, padding: 13, borderRadius: 14, gap: 8 },
-  guideTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  guideTitle: { flex: 1, fontSize: 15, fontWeight: "900" },
-  guideText: { fontSize: 13, lineHeight: 20 },
-  roomText: { fontSize: 13, fontWeight: "800" },
-  disclaimer: { fontSize: 11, lineHeight: 16, marginTop: 4 },
-  bottomAction: {
-    borderRadius: 14,
-    minHeight: 48,
+  warningText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400E",
+  },
+  guideBox: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+  },
+  guideTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  guideTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  guideText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  roomText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  disclaimer: {
+    fontSize: 11,
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  satelliteCard: {
+    gap: 14,
+    paddingTop: 8,
+  },
+  satelliteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  satelliteIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  satelliteTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  satelliteAddress: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  satelliteInfoBlock: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+  },
+  satelliteDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  satelliteTransportRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  satelliteTransportText: {
+    flex: 1,
+    fontSize: 12,
+  },
+  satelliteActionRow: {
+    gap: 10,
+    marginTop: 6,
+  },
+  satelliteActionBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 16,
     gap: 8,
-    paddingHorizontal: 10,
   },
-  actionText: {
+  satelliteSwitchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+  },
+  satelliteSwitchBtnText: {
     fontSize: 13,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    textAlign: "center",
+    fontWeight: "700",
   },
   directionsContent: {
-    paddingHorizontal: 12,
-    paddingTop: 24,
-    gap: 20,
     alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
   },
   directionsIcon: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 4,
   },
-  directionsHeading: { fontSize: 20, fontWeight: "900", textAlign: "center" },
-  directionsAddress: { fontSize: 14, lineHeight: 22, textAlign: "center" },
-  directionsAction: {
-    minHeight: 52,
+  directionsHeading: {
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  directionsAddress: {
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: 16,
+  },
+  transportTipBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 12,
     borderRadius: 14,
+    borderWidth: 1,
+    width: "100%",
+  },
+  transportTipTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  transportTipText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  directionsAction: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
     gap: 8,
-    paddingHorizontal: 18,
+    width: "100%",
+    marginTop: 6,
+  },
+  bottomAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 16,
+    gap: 8,
+    marginTop: 10,
+  },
+  actionText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

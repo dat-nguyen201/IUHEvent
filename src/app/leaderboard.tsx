@@ -52,7 +52,6 @@ export default function LeaderboardScreen() {
     }, [loadData])
   );
 
-  const myDrl = Math.min(100, 65 + checkedInEventIds.length * 5);
   const topStudents = data?.topStudents || [];
   const facultyRankings = data?.facultyRankings || [];
 
@@ -62,11 +61,13 @@ export default function LeaderboardScreen() {
   const rank3 = topStudents[2];
   const restStudents = topStudents.slice(3);
 
-  // Find current user's rank in the list
+  // Find current user's rank in the list or from server calculation
   const myRankIndex = topStudents.findIndex(
     (s) => s.studentId === user?.studentId || s.userId === user?.id
   );
-  const myRank = myRankIndex >= 0 ? myRankIndex + 1 : 12;
+  const myRank = data?.currentUser?.rank ?? (myRankIndex >= 0 ? myRankIndex + 1 : (topStudents.length > 0 ? topStudents.length + 1 : 1));
+  const myDrl = data?.currentUser?.drlPoints ?? Math.min(100, 65 + checkedInEventIds.length * 5);
+  const myCheckedInCount = data?.currentUser?.checkedInCount ?? checkedInEventIds.length;
 
   const renderStudentItem = ({ item }: { item: LeaderboardStudent }) => {
     const isMe = item.studentId === user?.studentId || item.userId === user?.id;
@@ -390,7 +391,7 @@ export default function LeaderboardScreen() {
               {user?.name || 'Bạn'}
             </Text>
             <Text style={[styles.mySubText, { color: theme.muted.val }]}>
-              {checkedInEventIds.length} sự kiện đã check-in
+              {myCheckedInCount} sự kiện đã check-in
             </Text>
           </View>
         </View>

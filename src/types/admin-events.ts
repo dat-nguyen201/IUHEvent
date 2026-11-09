@@ -41,9 +41,18 @@ export type AdminEventPage = {
   hasMore: boolean;
 };
 
+export type ParticipantFilter = 'all' | 'under50' | '50to100' | 'over100' | 'zero';
+export type RatingFilter = 'all' | '4.5plus' | '4.0plus' | '3.0plus' | 'unrated';
+export type TimeFilter = 'all' | 'upcoming' | 'past' | 'this_week' | 'this_month';
+export type AdminEventSort = 'date_desc' | 'date_asc' | 'participants_desc' | 'participants_asc' | 'rating_desc';
+
 export type AdminEventFilter = {
   page?: number;
   pageSize?: number;
   query?: string;
   status?: AdminEventStatus;
+  participantRange?: ParticipantFilter;
+  ratingRange?: RatingFilter;
+  timeRange?: TimeFilter;
+  sortBy?: AdminEventSort;
 };

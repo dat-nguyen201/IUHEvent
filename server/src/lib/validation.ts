@@ -98,3 +98,9 @@ export const chatSchema = z.object({
     content: z.string().trim().min(1).max(2_000),
   }).strict()).min(1).max(12),
 }).strict();
+
+export const resolveCampusSchema = z.object({
+  location: z.string().trim().min(1).max(500),
+  title: z.string().trim().max(300).optional(),
+  description: z.string().trim().max(2000).optional(),
+}).strict();

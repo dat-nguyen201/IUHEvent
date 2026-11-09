@@ -1,5 +1,6 @@
 import { appMode } from '@/constants/app-mode';
 import { apiRequest } from '@/services/apiClient';
+import { getRemoteAccessToken } from '@/services/remoteAuthService';
 
 export interface LeaderboardStudent {
   rank: number;
@@ -10,6 +11,14 @@ export interface LeaderboardStudent {
   drlPoints: number;
   checkedInCount: number;
   avatarUrl?: string;
+  badge: string;
+}
+
+export interface CurrentUserRankInfo {
+  rank: number;
+  totalStudents: number;
+  drlPoints: number;
+  checkedInCount: number;
   badge: string;
 }
 
@@ -24,6 +33,7 @@ export interface FacultyRanking {
 export interface LeaderboardData {
   topStudents: LeaderboardStudent[];
   facultyRankings: FacultyRanking[];
+  currentUser?: CurrentUserRankInfo | null;
   updatedAt: string;
 }
 
@@ -47,7 +57,10 @@ const FALLBACK_LEADERBOARD: LeaderboardData = {
 export async function fetchLeaderboard(): Promise<LeaderboardData> {
   if (appMode === 'remote') {
     try {
-      const response = await apiRequest<{ data: LeaderboardData }>('/api/leaderboard');
+      const token = await getRemoteAccessToken();
+      const response = await apiRequest<{ data: LeaderboardData }>('/api/leaderboard', {
+        token: token || undefined,
+      });
       if (response?.data) return response.data;
     } catch (error) {
       console.warn('Could not fetch remote leaderboard, using fallback:', error);

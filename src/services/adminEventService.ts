@@ -43,6 +43,18 @@ export async function listAdminEvents(
   params.set("pageSize", String(filters.pageSize ?? 10));
   if (filters.query?.trim()) params.set("query", filters.query.trim());
   if (filters.status) params.set("status", filters.status);
+  if (filters.timeRange && filters.timeRange !== "all") {
+    params.set("timeRange", filters.timeRange);
+  }
+  if (filters.participantRange && filters.participantRange !== "all") {
+    params.set("participantRange", filters.participantRange);
+  }
+  if (filters.ratingRange && filters.ratingRange !== "all") {
+    params.set("ratingRange", filters.ratingRange);
+  }
+  if (filters.sortBy && filters.sortBy !== "date_desc") {
+    params.set("sortBy", filters.sortBy);
+  }
   return apiRequest<AdminEventPage>(`${EVENTS_ENDPOINT}?${params.toString()}`, {
     token,
   });

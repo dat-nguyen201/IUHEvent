@@ -9,7 +9,14 @@ import { AdminEventReviewsModal } from '@/components/admin/AdminEventReviewsModa
 import { Screen } from '@/components/Screen';
 import { exportAttendanceCsvFile } from '@/services/attendanceCsvFile';
 import { generateAttendanceCsv, getAdminEventError, getEventAttendance, listAdminEvents, setAdminEventStatus } from '@/services/adminEventService';
-import type { AdminEvent, AdminEventStatus } from '@/types/admin-events';
+import type {
+  AdminEvent,
+  AdminEventSort,
+  AdminEventStatus,
+  ParticipantFilter,
+  RatingFilter,
+  TimeFilter,
+} from '@/types/admin-events';
 import { formatEventDate } from '@/utils/date';
 import { useAuth } from '@/context/AuthContext';
 
@@ -22,6 +29,37 @@ const STATUSES = [
 ] as const;
 type StatusFilter = AdminEventStatus | 'all';
 type PendingChange = { event: AdminEvent; status: AdminEventStatus };
+
+const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'upcoming', label: 'Sắp diễn ra' },
+  { value: 'past', label: 'Đã diễn ra' },
+  { value: 'this_month', label: 'Trong tháng này' },
+  { value: 'this_week', label: 'Trong tuần này' },
+];
+
+const PARTICIPANT_OPTIONS: { value: ParticipantFilter; label: string }[] = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'under50', label: '< 50 người' },
+  { value: '50to100', label: '50 - 100 người' },
+  { value: 'over100', label: '> 100 người' },
+  { value: 'zero', label: 'Chưa có ai (0)' },
+];
+
+const RATING_OPTIONS: { value: RatingFilter; label: string }[] = [
+  { value: 'all', label: 'Tất cả' },
+  { value: '4.5plus', label: '⭐ 4.5+' },
+  { value: '4.0plus', label: '⭐ 4.0+' },
+  { value: '3.0plus', label: '⭐ 3.0+' },
+  { value: 'unrated', label: 'Chưa có đánh giá' },
+];
+
+const SORT_OPTIONS: { value: AdminEventSort; label: string }[] = [
+  { value: 'date_desc', label: 'Mới nhất' },
+  { value: 'date_asc', label: 'Cũ nhất' },
+  { value: 'participants_desc', label: 'Tham gia đông nhất' },
+  { value: 'rating_desc', label: 'Đánh giá cao nhất' },
+];
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   created: 'Tạo sự kiện thành công. Sự kiện đang ở trạng thái bản nháp.',
@@ -36,6 +74,11 @@ export default function AdminEventsScreen() {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [timeRange, setTimeRange] = useState<TimeFilter>('all');
+  const [participantRange, setParticipantRange] = useState<ParticipantFilter>('all');
+  const [ratingRange, setRatingRange] = useState<RatingFilter>('all');
+  const [sortBy, setSortBy] = useState<AdminEventSort>('date_desc');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -48,11 +91,27 @@ export default function AdminEventsScreen() {
   const [busy, setBusy] = useState(false);
   const requestIdRef = useRef(0);
 
+  const activeFiltersCount =
+    (timeRange !== 'all' ? 1 : 0) +
+    (participantRange !== 'all' ? 1 : 0) +
+    (ratingRange !== 'all' ? 1 : 0) +
+    (sortBy !== 'date_desc' ? 1 : 0);
+
+  const resetAllFilters = () => {
+    setTimeRange('all');
+    setParticipantRange('all');
+    setRatingRange('all');
+    setSortBy('date_desc');
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 350);
     return () => clearTimeout(timer);
   }, [query]);
-  useEffect(() => { setPage(1); }, [search, status]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, status, timeRange, participantRange, ratingRange, sortBy]);
 
   const loadEvents = useCallback(async (isRefresh = false) => {
     const requestId = ++requestIdRef.current;
@@ -60,7 +119,16 @@ export default function AdminEventsScreen() {
     else setLoading(true);
     setError('');
     try {
-      const response = await listAdminEvents({ page, pageSize: PAGE_SIZE, query: search, status: status === 'all' ? undefined : status });
+      const response = await listAdminEvents({
+        page,
+        pageSize: PAGE_SIZE,
+        query: search,
+        status: status === 'all' ? undefined : status,
+        timeRange,
+        participantRange,
+        ratingRange,
+        sortBy,
+      });
       if (requestId !== requestIdRef.current) return;
       setItems(response.data);
       setTotal(response.total);
@@ -74,7 +142,7 @@ export default function AdminEventsScreen() {
     } finally {
       if (requestId === requestIdRef.current) { setLoading(false); setRefreshing(false); }
     }
-  }, [page, search, status]);
+  }, [page, search, status, timeRange, participantRange, ratingRange, sortBy]);
 
   // Mỗi lần trở lại màn sau khi thêm/sửa, tải dữ liệu mới nhất từ backend.
   useFocusEffect(useCallback(() => {
@@ -274,6 +342,238 @@ export default function AdminEventsScreen() {
             </Pressable>;
           })}
         </View>
+
+        {/* Thanh điều khiển bộ lọc nâng cao */}
+        <View style={styles.filterControlBar}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowAdvancedFilters((prev) => !prev)}
+            style={[
+              styles.filterToggleBtn,
+              {
+                backgroundColor: activeFiltersCount > 0 ? `${theme.primary.val}15` : theme.surface.val,
+                borderColor: activeFiltersCount > 0 ? theme.primary.val : theme.border.val,
+              },
+            ]}
+          >
+            <Ionicons
+              name="funnel-outline"
+              size={15}
+              color={activeFiltersCount > 0 ? theme.primary.val : theme.color.val}
+            />
+            <Text
+              style={[
+                styles.filterToggleText,
+                { color: activeFiltersCount > 0 ? theme.primary.val : theme.color.val },
+              ]}
+            >
+              Bộ lọc & Sắp xếp {activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}
+            </Text>
+            <Ionicons
+              name={showAdvancedFilters ? 'chevron-up' : 'chevron-down'}
+              size={15}
+              color={activeFiltersCount > 0 ? theme.primary.val : theme.muted.val}
+            />
+          </Pressable>
+
+          {activeFiltersCount > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={resetAllFilters}
+              style={[styles.resetFiltersBtn, { borderColor: `${theme.primary.val}40` }]}
+            >
+              <Ionicons name="refresh-outline" size={13} color={theme.primary.val} />
+              <Text style={[styles.resetFiltersText, { color: theme.primary.val }]}>Đặt lại</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Panel bộ lọc mở rộng */}
+        {showAdvancedFilters && (
+          <View style={[styles.advancedPanel, { backgroundColor: theme.surface.val, borderColor: theme.border.val }]}>
+            {/* Nhóm 1: Thời gian */}
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupLabelRow}>
+                <Ionicons name="time-outline" size={14} color={theme.primary.val} />
+                <Text style={[styles.filterGroupLabel, { color: theme.color.val }]}>Thời gian diễn ra</Text>
+              </View>
+              <View style={styles.filterChipsRow}>
+                {TIME_OPTIONS.map((opt) => {
+                  const selected = timeRange === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setTimeRange(opt.value)}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: selected ? theme.primary.val : theme.border.val,
+                          backgroundColor: selected ? theme.primary.val : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.color.val }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Nhóm 2: Số lượng đã tham gia */}
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupLabelRow}>
+                <Ionicons name="people-outline" size={14} color={theme.primary.val} />
+                <Text style={[styles.filterGroupLabel, { color: theme.color.val }]}>Số lượng đã tham gia (Check-in)</Text>
+              </View>
+              <View style={styles.filterChipsRow}>
+                {PARTICIPANT_OPTIONS.map((opt) => {
+                  const selected = participantRange === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setParticipantRange(opt.value)}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: selected ? theme.primary.val : theme.border.val,
+                          backgroundColor: selected ? theme.primary.val : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.color.val }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Nhóm 3: Điểm đánh giá */}
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupLabelRow}>
+                <Ionicons name="star-outline" size={14} color="#F59E0B" />
+                <Text style={[styles.filterGroupLabel, { color: theme.color.val }]}>Điểm đánh giá (Review)</Text>
+              </View>
+              <View style={styles.filterChipsRow}>
+                {RATING_OPTIONS.map((opt) => {
+                  const selected = ratingRange === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setRatingRange(opt.value)}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: selected ? theme.primary.val : theme.border.val,
+                          backgroundColor: selected ? theme.primary.val : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.color.val }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Nhóm 4: Sắp xếp */}
+            <View style={styles.filterGroup}>
+              <View style={styles.filterGroupLabelRow}>
+                <Ionicons name="swap-vertical-outline" size={14} color={theme.primary.val} />
+                <Text style={[styles.filterGroupLabel, { color: theme.color.val }]}>Sắp xếp theo</Text>
+              </View>
+              <View style={styles.filterChipsRow}>
+                {SORT_OPTIONS.map((opt) => {
+                  const selected = sortBy === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setSortBy(opt.value)}
+                      style={[
+                        styles.chip,
+                        {
+                          borderColor: selected ? theme.primary.val : theme.border.val,
+                          backgroundColor: selected ? theme.primary.val : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: selected ? '#FFFFFF' : theme.color.val }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Thanh hiển thị các bộ lọc đang kích hoạt khi thu gọn */}
+        {!showAdvancedFilters && activeFiltersCount > 0 && (
+          <View style={styles.activeTagsRow}>
+            {timeRange !== 'all' && (
+              <Pressable
+                onPress={() => setTimeRange('all')}
+                style={[
+                  styles.activeTag,
+                  { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}40` },
+                ]}
+              >
+                <Text style={[styles.activeTagText, { color: theme.primary.val }]}>
+                  🕒 {TIME_OPTIONS.find((o) => o.value === timeRange)?.label}
+                </Text>
+                <Ionicons name="close" size={13} color={theme.primary.val} />
+              </Pressable>
+            )}
+            {participantRange !== 'all' && (
+              <Pressable
+                onPress={() => setParticipantRange('all')}
+                style={[
+                  styles.activeTag,
+                  { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}40` },
+                ]}
+              >
+                <Text style={[styles.activeTagText, { color: theme.primary.val }]}>
+                  👥 {PARTICIPANT_OPTIONS.find((o) => o.value === participantRange)?.label}
+                </Text>
+                <Ionicons name="close" size={13} color={theme.primary.val} />
+              </Pressable>
+            )}
+            {ratingRange !== 'all' && (
+              <Pressable
+                onPress={() => setRatingRange('all')}
+                style={[
+                  styles.activeTag,
+                  { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}40` },
+                ]}
+              >
+                <Text style={[styles.activeTagText, { color: theme.primary.val }]}>
+                  ⭐ {RATING_OPTIONS.find((o) => o.value === ratingRange)?.label}
+                </Text>
+                <Ionicons name="close" size={13} color={theme.primary.val} />
+              </Pressable>
+            )}
+            {sortBy !== 'date_desc' && (
+              <Pressable
+                onPress={() => setSortBy('date_desc')}
+                style={[
+                  styles.activeTag,
+                  { backgroundColor: `${theme.primary.val}15`, borderColor: `${theme.primary.val}40` },
+                ]}
+              >
+                <Text style={[styles.activeTagText, { color: theme.primary.val }]}>
+                  ↕️ {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
+                </Text>
+                <Ionicons name="close" size={13} color={theme.primary.val} />
+              </Pressable>
+            )}
+          </View>
+        )}
         {feedback && SUCCESS_MESSAGES[feedback] ? <AdminNotice kind="success">{SUCCESS_MESSAGES[feedback]}</AdminNotice> : null}
         {notice ? <AdminNotice kind="success">{notice}</AdminNotice> : null}
         <View style={styles.resultRow}><Text style={[styles.resultText, { color: theme.muted.val }]}>{loading ? 'Đang tải dữ liệu...' : `Hiển thị ${start}–${end} / ${total} sự kiện`}</Text><Pressable onPress={() => void loadEvents(true)} accessibilityRole="button" accessibilityLabel="Làm mới danh sách"><Ionicons name="refresh-outline" color={theme.primary.val} size={21} /></Pressable></View>
@@ -332,6 +632,89 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   filter: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9 },
   filterText: { fontSize: 11, fontWeight: '800' },
+  filterControlBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  filterToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  resetFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  resetFiltersText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  advancedPanel: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 14,
+  },
+  filterGroup: {
+    gap: 7,
+  },
+  filterGroupLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterGroupLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activeTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  activeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  activeTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   resultText: { fontSize: 12 }, list: { gap: 12, paddingBottom: 34 },
   center: { gap: 16, alignItems: 'center', padding: 30, justifyContent: 'center' },

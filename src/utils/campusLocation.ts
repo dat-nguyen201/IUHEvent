@@ -116,11 +116,79 @@ export const CAMPUS_BUILDINGS: CampusBuilding[] = [
   },
 ];
 
+export type IUHCampusId = "main" | "cs2" | "quang_ngai" | "thanh_hoa";
+
+export interface IUHCampusInfo {
+  id: IUHCampusId;
+  name: string;
+  shortName: string;
+  badge: string;
+  address: string;
+  directionsUrl: string;
+  mapsUrl: string;
+  hasInternalMap: boolean;
+  description: string;
+  transportHint: string;
+}
+
+export const IUH_CAMPUSES: Record<IUHCampusId, IUHCampusInfo> = {
+  main: {
+    id: "main",
+    name: "Trụ sở chính IUH (Cơ sở 1 - Gò Vấp)",
+    shortName: "Trụ sở chính (12 Nguyễn Văn Bảo)",
+    badge: "Trụ sở chính",
+    address: "Số 12 Nguyễn Văn Bảo, Phường 4, Quận Gò Vấp, TP. Hồ Chí Minh",
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Trường Đại học Công nghiệp TP.HCM, 12 Nguyễn Văn Bảo, Gò Vấp, TP. Hồ Chí Minh")}&dir_action=navigate`,
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=10.822159,106.687483",
+    hasInternalMap: true,
+    description: "Khuôn viên chính gồm các dãy nhà A, B, C, D, E, F, G, H, I, T, V, X, trung tâm hội nghị và các phòng ban đào tạo.",
+    transportHint: "Tuyến xe buýt: 07, 148, 03. Cổng 1 nằm trên đường Nguyễn Văn Bảo, Cổng 2 và Cổng 3 thông ra các trục đường nội khu.",
+  },
+  cs2: {
+    id: "cs2",
+    name: "ĐH Công nghiệp TP.HCM - Cơ sở 2 (Gò Vấp)",
+    shortName: "Cơ sở 2 (20 Nguyễn Văn Dung)",
+    badge: "Cơ sở 2",
+    address: "Số 20 Nguyễn Văn Dung, Phường 6, Quận Gò Vấp, TP. Hồ Chí Minh",
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Trường Đại học Công nghiệp TP.HCM - Cơ sở 2, 20 Nguyễn Văn Dung, Gò Vấp, TP. Hồ Chí Minh")}&dir_action=navigate`,
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=10.844754,106.684128",
+    hasInternalMap: false,
+    description: "Trung tâm Giáo dục Thể chất, sân bóng đá cỏ nhân tạo, nhà thi đấu đa năng, trung tâm thực hành và ký túc xá sinh viên.",
+    transportHint: "Cách trụ sở chính khoảng 3km, đi thẳng đường Nguyễn Oanh qua ngã tư Nguyễn Văn Lượng rồi rẽ vào Nguyễn Văn Dung.",
+  },
+  quang_ngai: {
+    id: "quang_ngai",
+    name: "ĐH Công nghiệp TP.HCM - Phân hiệu Quảng Ngãi",
+    shortName: "Phân hiệu Quảng Ngãi",
+    badge: "Phân hiệu Miền Trung",
+    address: "Số 938 Quang Trung, TP. Quảng Ngãi, Tỉnh Quảng Ngãi",
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Đại học Công nghiệp TP.HCM Phân hiệu Quảng Ngãi, 938 Quang Trung, TP. Quảng Ngãi")}&dir_action=navigate`,
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=15.111874,108.795844",
+    hasInternalMap: false,
+    description: "Cơ sở đào tạo bậc đại học và sau đại học trọng điểm của IUH tại khu vực miền Trung - Tây Nguyên.",
+    transportHint: "Nằm trên trục đường chính Quang Trung tại trung tâm TP. Quảng Ngãi, thuận tiện đón xe khách và xe buýt liên tỉnh.",
+  },
+  thanh_hoa: {
+    id: "thanh_hoa",
+    name: "ĐH Công nghiệp TP.HCM - Cơ sở Thanh Hóa",
+    shortName: "Cơ sở Thanh Hóa",
+    badge: "Cơ sở Miền Bắc",
+    address: "Xã Quảng Tâm, TP. Thanh Hóa, Tỉnh Thanh Hóa",
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent("Đại học Công nghiệp TP.HCM Cơ sở Thanh Hóa, Xã Quảng Tâm, TP. Thanh Hóa")}&dir_action=navigate`,
+    mapsUrl: "https://www.google.com/maps/search/?api=1&query=19.761502,105.828699",
+    hasInternalMap: false,
+    description: "Cơ sở đào tạo phía Bắc của Trường ĐH Công nghiệp TP.HCM, phục vụ đào tạo và nghiên cứu khoa học.",
+    transportHint: "Nằm trên tuyến Quốc lộ 47, gần đường tránh TP. Thanh Hóa, kết nối trực tiếp với trung tâm thành phố và bến xe.",
+  },
+};
+
 export interface ResolvedCampusLocation {
+  campus: IUHCampusInfo;
   code: CampusBuildingCode | null;
   room: string | null;
   floorHint: string | null;
   warning: string | null;
+  aiExplanation?: string;
 }
 
 const BUILDING_CODE_PATTERN = "[A-ITVX]";
@@ -135,33 +203,81 @@ const STANDALONE_ROOM = new RegExp(
   `\\b(${BUILDING_CODE_PATTERN})(\\d{1,2})[.\\-/](\\d{1,3})\\b`,
 );
 
+function stripDiacritics(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+}
+
 export function resolveCampusLocation(
   locationName: string,
+  extraContext?: string,
 ): ResolvedCampusLocation {
-  const normalized = locationName
+  const fullText = `${locationName} ${extraContext || ""}`.trim();
+  const normalizedLower = stripDiacritics(fullText);
+  const normalizedUpper = fullText
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
     .replace(/Đ/g, "D")
     .toUpperCase();
 
-  const roomMatch = ROOM_PATTERN.exec(normalized);
-  const labeledMatch = LABELED_BUILDING.exec(normalized);
-  const standaloneMatch = STANDALONE_ROOM.exec(normalized);
+  // 1. Phân hiệu Quảng Ngãi
+  if (normalizedLower.includes("quang ngai") || normalizedLower.includes("938 quang trung")) {
+    return {
+      campus: IUH_CAMPUSES.quang_ngai,
+      code: null,
+      room: null,
+      floorHint: null,
+      warning: null,
+      aiExplanation: "AI phân tích địa điểm sự kiện thuộc Phân hiệu Quảng Ngãi (938 Quang Trung).",
+    };
+  }
+
+  // 2. Cơ sở Thanh Hóa
+  if (normalizedLower.includes("thanh hoa") || normalizedLower.includes("quang tam")) {
+    return {
+      campus: IUH_CAMPUSES.thanh_hoa,
+      code: null,
+      room: null,
+      floorHint: null,
+      warning: null,
+      aiExplanation: "AI phân tích địa điểm sự kiện thuộc Cơ sở Thanh Hóa (Quảng Tâm).",
+    };
+  }
+
+  // 3. Cơ sở 2 (20 Nguyễn Văn Dung, Gò Vấp)
+  if (
+    normalizedLower.includes("co so 2") ||
+    normalizedLower.includes("cs2") ||
+    normalizedLower.includes("nguyen van dung") ||
+    normalizedLower.includes("san bong") ||
+    normalizedLower.includes("san van dong") ||
+    normalizedLower.includes("giao duc the chat")
+  ) {
+    return {
+      campus: IUH_CAMPUSES.cs2,
+      code: null,
+      room: null,
+      floorHint: null,
+      warning: null,
+      aiExplanation: "AI phân tích địa điểm sự kiện thuộc Cơ sở 2 (20 Nguyễn Văn Dung, Gò Vấp) - Khu giáo dục thể chất & thể thao.",
+    };
+  }
+
+  // 4. Trụ sở chính (12 Nguyễn Văn Bảo, Gò Vấp)
+  const roomMatch = ROOM_PATTERN.exec(normalizedUpper);
+  const labeledMatch = LABELED_BUILDING.exec(normalizedUpper);
+  const standaloneMatch = STANDALONE_ROOM.exec(normalizedUpper);
   const code = (labeledMatch?.[1] ??
     roomMatch?.[1] ??
     standaloneMatch?.[1] ??
     null) as CampusBuildingCode | null;
-  if (!code || !CAMPUS_BUILDINGS.some((building) => building.code === code)) {
-    return {
-      code: null,
-      room: null,
-      floorHint: null,
-      warning:
-        "Chưa xác định được tòa nhà từ địa điểm sự kiện. Vui lòng xem thông tin ban tổ chức hoặc chọn tòa nhà thủ công trên sơ đồ.",
-    };
-  }
 
+  const validCode = code && CAMPUS_BUILDINGS.some((b) => b.code === code) ? code : null;
   const matchedRoom = roomMatch ?? standaloneMatch;
   const room = matchedRoom
     ? locationName.slice(
@@ -172,8 +288,23 @@ export function resolveCampusLocation(
   const floorNumber = matchedRoom?.[2] ? Number(matchedRoom[2]) : null;
   const floorHint =
     floorNumber !== null
-      ? `Tầng ${floorNumber} (suy ra từ mã phòng, cần kiểm tra lại tại tòa nhà)`
+      ? `Tầng ${floorNumber} (suy ra từ mã phòng, hãy đối chiếu tại tòa nhà)`
       : null;
 
-  return { code, room, floorHint, warning: null };
+  const warning = !validCode
+    ? "Chưa xác định được cụ thể tòa nhà từ địa điểm sự kiện. Hệ thống gợi ý điều hướng đến cổng Trụ sở chính IUH."
+    : null;
+
+  const aiExplanation = validCode
+    ? `AI phân tích địa điểm sự kiện thuộc Trụ sở chính IUH (12 Nguyễn Văn Bảo) - Nhà ${validCode}${room ? `, Phòng ${room}` : ""}.`
+    : "AI phân tích sự kiện diễn ra tại Trụ sở chính IUH (12 Nguyễn Văn Bảo, Gò Vấp).";
+
+  return {
+    campus: IUH_CAMPUSES.main,
+    code: validCode,
+    room,
+    floorHint,
+    warning,
+    aiExplanation,
+  };
 }

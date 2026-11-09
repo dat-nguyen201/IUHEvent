@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   Share,
@@ -22,6 +23,7 @@ import { appMode } from "@/constants/app-mode";
 import { invalidateEventsCache } from "@/services/eventsApi";
 import { ApiError } from "@/services/apiClient";
 import { formatEventDate, isFutureEvent } from "@/utils/date";
+import { resolveCampusLocation } from "@/utils/campusLocation";
 
 import { ReminderModal } from "@/components/ReminderModal";
 import { EventQrModal } from "@/components/EventQrModal";
@@ -48,6 +50,11 @@ export default function EventDetailScreen() {
   const [showPassModal, setShowPassModal] = useState(false);
   const [showCertModal, setShowCertModal] = useState(false);
   const [showCampusMap, setShowCampusMap] = useState(false);
+
+  const campusInfo = useMemo(() => {
+    if (!event) return null;
+    return resolveCampusLocation(event.location, `${event.title} ${event.description}`);
+  }, [event]);
 
   const {
     user,
@@ -415,9 +422,25 @@ export default function EventDetailScreen() {
             <Text style={[styles.infoValue, { color: theme.color.val, flex: 1 }]}>
               {event.location}
             </Text>
-            <View style={[styles.campusMapBadge, { backgroundColor: `${theme.primary.val}15` }]}>
-              <Ionicons name="map-outline" size={13} color={theme.primary.val} />
-              <Text style={[styles.campusMapBadgeText, { color: theme.primary.val }]}>Sơ đồ</Text>
+            <View style={styles.locationActionsRow}>
+              <View style={[styles.campusMapBadge, { backgroundColor: `${theme.primary.val}15` }]}>
+                <Ionicons name="map-outline" size={13} color={theme.primary.val} />
+                <Text style={[styles.campusMapBadgeText, { color: theme.primary.val }]}>Sơ đồ</Text>
+              </View>
+              {campusInfo && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    void Linking.openURL(campusInfo.campus.directionsUrl);
+                  }}
+                  style={[styles.campusMapBadge, { backgroundColor: "#10B98115" }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Chỉ đường Google Maps đến ${campusInfo.campus.badge}`}
+                >
+                  <Ionicons name="navigate-outline" size={13} color="#059669" />
+                  <Text style={[styles.campusMapBadgeText, { color: "#059669" }]}>Chỉ đường</Text>
+                </Pressable>
+              )}
             </View>
           </Pressable>
           <Text style={[styles.infoLabel, { color: theme.muted.val }]}>
@@ -681,6 +704,8 @@ export default function EventDetailScreen() {
       <CampusMapModal
         visible={showCampusMap}
         locationName={event.location}
+        eventTitle={event.title}
+        eventDescription={event.description}
         onClose={() => setShowCampusMap(false)}
       />
     </Screen>
@@ -797,6 +822,11 @@ const styles = StyleSheet.create({
   campusMapBadgeText: {
     fontSize: 11,
     fontWeight: "800",
+  },
+  locationActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   sectionHeadingTitle: {
     fontSize: 17,
