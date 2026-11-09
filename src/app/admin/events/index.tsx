@@ -7,6 +7,7 @@ import { ActivityIndicator, Alert, FlatList, Image, Pressable, RefreshControl, S
 import { AdminButton, AdminConfirmDialog, AdminNotice, AdminPanel, AdminStatusBadge } from '@/components/admin/AdminWidgets';
 import { AdminEventReviewsModal } from '@/components/admin/AdminEventReviewsModal';
 import { Screen } from '@/components/Screen';
+import { exportAttendanceCsvFile } from '@/services/attendanceCsvFile';
 import { generateAttendanceCsv, getAdminEventError, getEventAttendance, listAdminEvents, setAdminEventStatus } from '@/services/adminEventService';
 import type { AdminEvent, AdminEventStatus } from '@/types/admin-events';
 import { formatEventDate } from '@/utils/date';
@@ -141,10 +142,14 @@ export default function AdminEventsScreen() {
                   },
                 ];
                 const csv = generateAttendanceCsv(event.title, sampleRows);
-                await Share.share({
-                  title: `Mẫu danh sách điểm danh - ${event.title}`,
-                  message: csv,
-                });
+                try {
+                  await exportAttendanceCsvFile(csv, event.id);
+                } catch {
+                  await Share.share({
+                    title: `Mẫu danh sách điểm danh - ${event.title}`,
+                    message: csv,
+                  });
+                }
               },
             },
           ],
@@ -152,10 +157,14 @@ export default function AdminEventsScreen() {
         return;
       }
       const csv = generateAttendanceCsv(event.title, result.data);
-      await Share.share({
-        title: `Danh sách điểm danh - ${event.title}`,
-        message: csv,
-      });
+      try {
+        await exportAttendanceCsvFile(csv, event.id);
+      } catch {
+        await Share.share({
+          title: `Danh sách điểm danh - ${event.title}`,
+          message: csv,
+        });
+      }
     } catch (e) {
       Alert.alert('Lỗi xuất dữ liệu', e instanceof Error ? e.message : 'Không thể lấy danh sách điểm danh.');
     }
