@@ -41,6 +41,12 @@ yarn-error.*
 
 example
 
+# documentation & report documents
+.md/
+.md
+*Nhom05_TaiLieuBaoCaoDeTai*
+*.docx
+
 # generated native folders
 /ios
 /android
